@@ -78,7 +78,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
         }
     }, [t, relatedUpdated]);
 
-    const refresh = useSequentialAutoRefresh(loadProcesses, processRefreshIntervalMs);
+    useSequentialAutoRefresh(loadProcesses, processRefreshIntervalMs);
 
     const loadDetail = useCallback(async (pid: number) => {
         setIsDetailLoading(true);
@@ -261,7 +261,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
-            <RefreshControls t={t} {...refresh} updatedAt={lastUpdated}/>
+            <RefreshControls t={t} updatedAt={lastUpdated}/>
             <div className="resource-toolbar process-toolbar">
                 <label className="filter-field">
                     <span>{t('filter.processName')}</span>

@@ -40,11 +40,11 @@ function LogsPage({page, t}: LogsPageProps) {
         }
     }, [t]);
 
-    const refresh = useSequentialAutoRefresh(loadLogs, logRefreshIntervalMs);
+    useSequentialAutoRefresh(loadLogs, logRefreshIntervalMs);
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
-            <RefreshControls t={t} {...refresh} updatedAt={lastUpdated}/>
+            <RefreshControls t={t} updatedAt={lastUpdated}/>
             {errorMessage && <StatusMessage variant="error">{errorMessage}</StatusMessage>}
             {isLoading && logs.length === 0 && (
                 <StatusMessage variant="loading">{t('logs.loading')}</StatusMessage>

@@ -71,7 +71,7 @@ function CleanupPage({page, t}: CleanupPageProps) {
         }
     }, [t]);
 
-    const refresh = useSequentialAutoRefresh(loadCleanupData, cleanupRefreshIntervalMs);
+    useSequentialAutoRefresh(loadCleanupData, cleanupRefreshIntervalMs);
 
     const candidates = useMemo(() => {
         return buildCleanupCandidates(processes, ports, cleanupRules).filter(candidate => !ignored.has(candidateIdentity(candidate)));
@@ -310,7 +310,7 @@ function CleanupPage({page, t}: CleanupPageProps) {
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
-            <RefreshControls t={t} {...refresh} updatedAt={lastUpdated}/>
+            <RefreshControls t={t} updatedAt={lastUpdated}/>
             <p className="refresh-controls">{t('cleanup.notice')}</p>
             {ignored.size > 0 && <button type="button" className="sort-button" onClick={() => setIgnored(new Set())}>{t('cleanup.restore')} ({ignored.size})</button>}
             <div className="resource-toolbar cleanup-toolbar" role="toolbar" aria-label={t('cleanup.actions')}>

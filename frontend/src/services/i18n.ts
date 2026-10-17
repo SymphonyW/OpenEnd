@@ -8,8 +8,6 @@ export const languages = [
 export type LanguageCode = typeof languages[number]['code'];
 
 const englishTranslations = {
-    'refresh.pause': 'Pause refresh',
-    'refresh.resume': 'Resume refresh',
     'resource.collecting': 'Collecting…',
     'resource.stale': 'Last known value · refresh failed',
     'resource.unavailable': 'Unavailable',
@@ -240,8 +238,6 @@ export type Translator = (key: TranslationKey) => string;
 
 const chineseTranslations: Record<TranslationKey, string> = {
     'common.items': '项',
-    'refresh.pause': '暂停刷新',
-    'refresh.resume': '恢复刷新',
     'resource.collecting': '采集中…',
     'resource.stale': '上次数据 · 刷新失败',
     'resource.unavailable': '不可用',

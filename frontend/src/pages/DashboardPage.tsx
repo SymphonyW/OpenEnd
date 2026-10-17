@@ -1,7 +1,6 @@
 import {useCallback, useRef, useState} from 'react';
 import type {MouseEvent} from 'react';
 import StatusMessage from '../components/StatusMessage';
-import RefreshControls from '../components/RefreshControls';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {formatMemorySize, formatPercent, loadSystemResourceInfo, mergeResourceInfo, resourceStatus} from '../services/systemResources';
 import type {Translator} from '../services/i18n';
@@ -80,7 +79,7 @@ function DashboardPage({page, t}: Props) {
             setLoading(false);
         }
     }, [t]);
-    const refresh = useSequentialAutoRefresh(load, refreshInterval);
+    useSequentialAutoRefresh(load, refreshInterval);
 
     const resources = [
         {key: 'cpu' as const, title: t('dashboard.chart.cpu'), aria: t('dashboard.chart.cpuAria')},
@@ -94,7 +93,6 @@ function DashboardPage({page, t}: Props) {
 
     return (
         <section className="page-panel dashboard-page" aria-label={page.title}>
-            <RefreshControls t={t} {...refresh}/>
             {error && <StatusMessage variant="error">{error}</StatusMessage>}
             {loading && !info && <StatusMessage variant="loading">{t('dashboard.loading')}</StatusMessage>}
             {info && <div className="performance-workspace">

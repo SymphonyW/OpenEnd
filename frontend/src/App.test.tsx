@@ -1361,28 +1361,30 @@ describe('App layout navigation', () => {
         await waitFor(() => expect(within(table).queryByText('node.exe')).not.toBeInTheDocument());
     });
 
-    it('preserves filters sorting pause state and graph history across navigation', async () => {
+    it('keeps updating and preserves filters sorting and graph history across navigation', async () => {
         vi.useFakeTimers();
         render(<App/>);
         await act(async () => {});
         await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-        fireEvent.click(screen.getByRole('button', {name: 'Pause refresh'}));
-        const points = screen.getByLabelText('CPU usage chart').querySelector('polyline')!.getAttribute('points');
+        const points = screen.getByLabelText('CPU usage chart').querySelector('polyline')!.getAttribute('points')!.split(' ');
+        const dashboardCalls = getSystemResourceInfoMock.mock.calls.length;
+        expect(screen.queryByRole('button', {name: /Pause refresh|Resume refresh/})).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
         await act(async () => {});
         fireEvent.change(screen.getByLabelText('Process name'), {target: {value: 'node'}});
         fireEvent.click(screen.getByRole('button', {name: 'CPU'}));
-        fireEvent.click(screen.getByRole('button', {name: 'Pause refresh'}));
         const calls = getProcessListMock.mock.calls.length;
         await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
-        expect(getProcessListMock).toHaveBeenCalledTimes(calls);
+        expect(getProcessListMock).toHaveBeenCalledTimes(calls + 2);
+        expect(getSystemResourceInfoMock).toHaveBeenCalledTimes(dashboardCalls);
         fireEvent.click(screen.getByRole('button', {name: 'Performance'}));
-        expect(screen.getByLabelText('CPU usage chart').querySelector('polyline')!.getAttribute('points')).toBe(points);
-        expect(screen.getByRole('button', {name: 'Resume refresh'})).toBeInTheDocument();
+        await act(async () => {});
+        const retainedPoints = screen.getByLabelText('CPU usage chart').querySelector('polyline')!.getAttribute('points')!.split(' ');
+        expect(retainedPoints).toHaveLength(points.length + 1);
         fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
         expect(screen.getByLabelText('Process name')).toHaveValue('node');
         expect(screen.getByRole('button', {name: 'CPU'})).toHaveAttribute('aria-pressed', 'true');
-        expect(screen.getByRole('button', {name: 'Resume refresh'})).toBeInTheDocument();
+        expect(screen.queryByRole('button', {name: /Pause refresh|Resume refresh/})).not.toBeInTheDocument();
     });
 
     it('retains process rows and the last successful update time after refresh failure', async () => {

@@ -71,7 +71,7 @@ function PortsPage({page, t}: PortsPageProps) {
         }
     }, [t, relatedUpdated]);
 
-    const refresh = useSequentialAutoRefresh(loadPorts, portRefreshIntervalMs);
+    useSequentialAutoRefresh(loadPorts, portRefreshIntervalMs);
 
     const loadRelatedLogs = useCallback(async (port: PortInfo) => {
         setLogsErrorMessage('');
@@ -242,7 +242,7 @@ function PortsPage({page, t}: PortsPageProps) {
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
-            <RefreshControls t={t} {...refresh} updatedAt={lastUpdated}/>
+            <RefreshControls t={t} updatedAt={lastUpdated}/>
             <div className="resource-toolbar port-toolbar">
                 <label className="filter-field compact-filter">
                     <span>{t('filter.port')}</span>
