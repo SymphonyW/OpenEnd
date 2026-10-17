@@ -71,7 +71,7 @@ wails build -platform windows/amd64 -webview2 download -clean -nsis
 | NSIS 安装包 | `build/bin/*installer.exe` |
 | GitHub Actions artifact | `openend-windows-unsigned` |
 
-`wails.json` 中的 `info` 会写入 Windows 文件属性和安装包元数据；当前版本号为 `2.1.2`。
+`wails.json` 中的 `info` 会写入 Windows 文件属性和安装包元数据；当前版本号为 `2.1.3`。
 
 ## 验证安装包
 
