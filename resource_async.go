@@ -24,6 +24,9 @@ var defaultAsyncSystemResourceCollectors = newAsyncSystemResourceCollectors()
 
 func newAsyncSystemResourceCollectors() asyncSystemResourceCollectors {
 	cpuInfo := newCachedResourceCollector(collectCPUResourceInfo)
+	cpuInfo.valid = func(info cpuResourceInfo) bool {
+		return info.Name != "" && info.MaxMHz > 0 && info.PhysicalCores > 0 && info.LogicalProcessors > 0
+	}
 	gpu := newAsyncCachedCollector(resource.GetGPUInfo, gpuResourceRefreshInterval)
 	threadCount := newAsyncCachedCollector(collectThreadCount, threadResourceRefreshInterval)
 	portCount := newAsyncCachedCollector(collectPortCount, portResourceRefreshInterval)
@@ -39,6 +42,7 @@ func newAsyncSystemResourceCollectors() asyncSystemResourceCollectors {
 type cachedResourceCollector[T any] struct {
 	mu       sync.Mutex
 	collect  func() T
+	valid    func(T) bool
 	value    T
 	hasValue bool
 }
@@ -68,7 +72,7 @@ func (collector *cachedResourceCollector[T]) Get() T {
 	}
 
 	collector.value = next
-	collector.hasValue = true
+	collector.hasValue = collector.valid == nil || collector.valid(next)
 	return next
 }
 

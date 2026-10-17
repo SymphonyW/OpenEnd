@@ -164,6 +164,32 @@ func TestCachedResourceCollectorRetriesAfterPanic(t *testing.T) {
 	}
 }
 
+func TestCachedResourceCollectorRetriesIncompleteCPUInfo(t *testing.T) {
+	var calls int
+	collector := newCachedResourceCollector(func() cpuResourceInfo {
+		calls++
+		info := cpuResourceInfo{Name: "Test CPU", LogicalProcessors: 32}
+		if calls > 1 {
+			info.MaxMHz = 2200
+			info.PhysicalCores = 24
+		}
+		return info
+	})
+	collector.valid = func(info cpuResourceInfo) bool {
+		return info.Name != "" && info.MaxMHz > 0 && info.PhysicalCores > 0 && info.LogicalProcessors > 0
+	}
+	if info := collector.Get(); info.Name != "Test CPU" || info.LogicalProcessors != 32 || info.MaxMHz != 0 {
+		t.Fatalf("expected available fields from incomplete collection, got %+v", info)
+	}
+	if info := collector.Get(); info.MaxMHz != 2200 || info.PhysicalCores != 24 {
+		t.Fatalf("expected retry to recover frequency and physical cores, got %+v", info)
+	}
+	collector.Get()
+	if calls != 2 {
+		t.Fatalf("expected complete CPU information to be cached, got %d collections", calls)
+	}
+}
+
 func TestAsyncCachedCollectorReturnsImmediatelyAndLimitsInFlightWork(t *testing.T) {
 	var calls atomic.Int32
 	release := make(chan struct{})

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"strings"
 	"sync"
@@ -222,6 +223,9 @@ func collectCPUResourceInfo() cpuResourceInfo {
 	var info cpuResourceInfo
 
 	cpuStats, err := cpu.Info()
+	if err != nil {
+		log.Printf("collect CPU information: %v", err)
+	}
 	if err == nil {
 		for _, stat := range cpuStats {
 			if info.Name == "" {
@@ -229,9 +233,6 @@ func collectCPUResourceInfo() cpuResourceInfo {
 			}
 			if stat.Mhz > info.MaxMHz {
 				info.MaxMHz = stat.Mhz
-			}
-			if info.PhysicalCores <= 0 && stat.Cores > 0 {
-				info.PhysicalCores = int(stat.Cores)
 			}
 		}
 	}
@@ -241,9 +242,20 @@ func collectCPUResourceInfo() cpuResourceInfo {
 
 	if physicalCores, err := cpu.Counts(false); err == nil && physicalCores > 0 {
 		info.PhysicalCores = physicalCores
+	} else if err != nil {
+		log.Printf("collect physical CPU cores: %v", err)
 	}
 	if logicalProcessors, err := cpu.Counts(true); err == nil && logicalProcessors > 0 {
 		info.LogicalProcessors = logicalProcessors
+	}
+	if info.MaxMHz <= 0 || info.PhysicalCores <= 0 {
+		fallback := collectCPUResourceInfoFallback()
+		if info.MaxMHz <= 0 {
+			info.MaxMHz = fallback.MaxMHz
+		}
+		if info.PhysicalCores <= 0 {
+			info.PhysicalCores = fallback.PhysicalCores
+		}
 	}
 
 	return info
