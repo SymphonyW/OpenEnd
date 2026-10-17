@@ -1,5 +1,5 @@
 import {GetSystemResourceInfo} from '../../wailsjs/go/main/App';
-import type {SystemResourceInfo} from '../types/systemResources';
+import type {SystemResourceInfo, ResourceMetric, ResourceStatus} from '../types/systemResources';
 
 const bytesPerMegabyte = 1024 * 1024;
 const bytesPerGigabyte = bytesPerMegabyte * 1024;
@@ -30,4 +30,25 @@ export function formatPercent(value: number): string {
 
 export function isHighMemoryUsage(bytes: number): boolean {
     return bytes >= bytesPerGigabyte;
+}
+
+const metricFields: Record<ResourceMetric, (keyof SystemResourceInfo)[]> = {
+    cpu: ['cpuPercent'], cpuInfo: ['cpuName', 'cpuPhysicalCores', 'cpuLogicalProcessors', 'cpuMaxMHz'],
+    memory: ['usedMemoryBytes', 'freeMemoryBytes', 'totalMemoryBytes'], gpu: ['gpuPercent', 'gpuNames'],
+    vram: ['usedVRAMBytes', 'freeVRAMBytes', 'totalVRAMBytes'], processes: ['processCount'], threads: ['threadCount'], ports: ['portCount'], uptime: ['uptimeSeconds'],
+};
+export function resourceStatus(info: SystemResourceInfo, key: ResourceMetric): ResourceStatus {
+    return info.metrics?.[key] ?? {state: info.metrics ? 'unavailable' : 'ready', updatedAt: 0, error: ''};
+}
+export function mergeResourceInfo(previous: SystemResourceInfo | null, next: SystemResourceInfo): SystemResourceInfo {
+    const merged = {...next, metrics: next.metrics ? {...next.metrics} : undefined};
+    for (const key of Object.keys(metricFields) as ResourceMetric[]) {
+        const status = resourceStatus(next, key);
+        const old = previous ? resourceStatus(previous, key) : null;
+        if (status.state !== 'ready' && previous && old && (old.state === 'ready' || old.state === 'stale')) {
+            for (const field of metricFields[key]) Object.assign(merged, {[field]: previous[field]});
+            (merged.metrics ??= {})[key] = {...status, state: 'stale', updatedAt: old.updatedAt};
+        }
+    }
+    return merged;
 }

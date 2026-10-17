@@ -57,52 +57,52 @@ func TestCollectSystemResourceInfoRunsCollectorsConcurrently(t *testing.T) {
 	result := make(chan SystemResourceInfo, 1)
 	go func() {
 		result <- collectSystemResourceInfo(systemResourceCollectors{
-			CPUPercent: func() float64 {
+			CPUPercent: func() (float64, ResourceStatus) {
 				markStarted()
-				return 12.3
+				return 12.3, ResourceStatus{State: "ready"}
 			},
-			CPUInfo: func() cpuResourceInfo {
+			CPUInfo: func() (cpuResourceInfo, ResourceStatus) {
 				markStarted()
 				return cpuResourceInfo{
 					Name:              "Test CPU",
 					PhysicalCores:     8,
 					LogicalProcessors: 16,
 					MaxMHz:            3200,
-				}
+				}, ResourceStatus{State: "ready"}
 			},
-			Memory: func() memoryResourceInfo {
+			Memory: func() (memoryResourceInfo, ResourceStatus) {
 				markStarted()
 				return memoryResourceInfo{
 					TotalBytes: 100,
 					UsedBytes:  40,
 					FreeBytes:  60,
-				}
+				}, ResourceStatus{State: "ready"}
 			},
-			GPU: func() resource.GPUInfo {
+			GPU: func() (gpuResourceReading, ResourceStatus) {
 				markStarted()
-				return resource.GPUInfo{
+				return gpuResourceReading{Info: resource.GPUInfo{
 					GPUPercent:     21.5,
 					Names:          []string{"Test GPU"},
 					TotalVRAMBytes: 80,
 					UsedVRAMBytes:  20,
 					FreeVRAMBytes:  60,
-				}
+				}, GPU: ResourceStatus{State: "ready"}, VRAM: ResourceStatus{State: "ready"}}, ResourceStatus{State: "ready"}
 			},
-			ProcessCount: func() int {
+			ProcessCount: func() (int, ResourceStatus) {
 				markStarted()
-				return 7
+				return 7, ResourceStatus{State: "ready"}
 			},
-			ThreadCount: func() int {
+			ThreadCount: func() (int, ResourceStatus) {
 				markStarted()
-				return 70
+				return 70, ResourceStatus{State: "ready"}
 			},
-			PortCount: func() int {
+			PortCount: func() (int, ResourceStatus) {
 				markStarted()
-				return 3
+				return 3, ResourceStatus{State: "ready"}
 			},
-			Uptime: func() uint64 {
+			Uptime: func() (uint64, ResourceStatus) {
 				markStarted()
-				return 3600
+				return 3600, ResourceStatus{State: "ready"}
 			},
 		})
 	}()
@@ -123,103 +123,6 @@ func TestCollectSystemResourceInfoRunsCollectorsConcurrently(t *testing.T) {
 		}
 	case <-time.After(150 * time.Millisecond):
 		t.Fatalf("expected resource info after releasing collectors")
-	}
-}
-
-func TestCachedResourceCollectorCollectsOnceSynchronously(t *testing.T) {
-	var calls atomic.Int32
-	collector := newCachedResourceCollector(func() int {
-		calls.Add(1)
-		return 42
-	})
-
-	if value := collector.Get(); value != 42 {
-		t.Fatalf("expected first read to return collected value, got %d", value)
-	}
-	if value := collector.Get(); value != 42 {
-		t.Fatalf("expected cached read to return collected value, got %d", value)
-	}
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("expected collector to run once, got %d calls", got)
-	}
-}
-
-func TestCachedResourceCollectorRetriesAfterPanic(t *testing.T) {
-	var calls atomic.Int32
-	collector := newCachedResourceCollector(func() int {
-		if calls.Add(1) == 1 {
-			panic("first collection failed")
-		}
-		return 42
-	})
-
-	if value := collector.Get(); value != 0 {
-		t.Fatalf("expected zero value after failed collection, got %d", value)
-	}
-	if value := collector.Get(); value != 42 {
-		t.Fatalf("expected retry to return collected value, got %d", value)
-	}
-	if got := calls.Load(); got != 2 {
-		t.Fatalf("expected retry after panic, got %d calls", got)
-	}
-}
-
-func TestCachedResourceCollectorRetriesIncompleteCPUInfo(t *testing.T) {
-	var calls int
-	collector := newCachedResourceCollector(func() cpuResourceInfo {
-		calls++
-		info := cpuResourceInfo{Name: "Test CPU", LogicalProcessors: 32}
-		if calls > 1 {
-			info.MaxMHz = 2200
-			info.PhysicalCores = 24
-		}
-		return info
-	})
-	collector.valid = func(info cpuResourceInfo) bool {
-		return info.Name != "" && info.MaxMHz > 0 && info.PhysicalCores > 0 && info.LogicalProcessors > 0
-	}
-	if info := collector.Get(); info.Name != "Test CPU" || info.LogicalProcessors != 32 || info.MaxMHz != 0 {
-		t.Fatalf("expected available fields from incomplete collection, got %+v", info)
-	}
-	if info := collector.Get(); info.MaxMHz != 2200 || info.PhysicalCores != 24 {
-		t.Fatalf("expected retry to recover frequency and physical cores, got %+v", info)
-	}
-	collector.Get()
-	if calls != 2 {
-		t.Fatalf("expected complete CPU information to be cached, got %d collections", calls)
-	}
-}
-
-func TestAsyncCachedCollectorReturnsImmediatelyAndLimitsInFlightWork(t *testing.T) {
-	var calls atomic.Int32
-	release := make(chan struct{})
-	collector := newAsyncCachedCollector(func() int {
-		calls.Add(1)
-		<-release
-		return 42
-	}, time.Hour)
-
-	if value := collector.Get(); value != 0 {
-		t.Fatalf("expected zero value before first async refresh completes, got %d", value)
-	}
-
-	waitForAppTestCondition(t, func() bool {
-		return calls.Load() == 1
-	}, "expected first async refresh to start")
-
-	if value := collector.Get(); value != 0 {
-		t.Fatalf("expected zero value while refresh is still running, got %d", value)
-	}
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("expected one in-flight refresh, got %d", got)
-	}
-
-	close(release)
-	waitForAppTestCondition(t, func() bool {
-		return collector.Get() == 42
-	}, "expected cached value after async refresh completes")
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("expected cached read not to refresh inside interval, got %d calls", got)
 	}
 }
 
@@ -276,7 +179,7 @@ func TestGetPortListReturnsCurrentTCPListener(t *testing.T) {
 func TestKillProcessByPIDReturnsFailureForInvalidPID(t *testing.T) {
 	app := newTestApp(t)
 
-	result := app.KillProcessByPID(-1)
+	result := app.KillProcessByPID(-1, 0)
 
 	if result.Success {
 		t.Fatalf("expected invalid pid kill to fail")
@@ -306,7 +209,7 @@ func TestKillProcessByPIDReturnsFailureForInvalidPID(t *testing.T) {
 func TestKillProcessByPortLogsFailureForUnsupportedProtocol(t *testing.T) {
 	app := newTestApp(t)
 
-	result := app.KillProcessByPort(3000, "ICMP")
+	result := app.KillProcessByPort(3000, "ICMP", 0, 0)
 
 	if result.Success {
 		t.Fatalf("expected unsupported protocol kill to fail")
@@ -396,18 +299,19 @@ func useLightweightAsyncSystemResourceCollectors(t *testing.T) {
 	t.Helper()
 
 	original := defaultAsyncSystemResourceCollectors
-	defaultAsyncSystemResourceCollectors = asyncSystemResourceCollectors{
-		CPUInfo: func() cpuResourceInfo {
-			return cpuResourceInfo{}
+	defaultAsyncSystemResourceCollectors = systemResourceCollectors{
+		CPUPercent: original.CPUPercent, Memory: original.Memory, ProcessCount: original.ProcessCount, Uptime: original.Uptime,
+		CPUInfo: func() (cpuResourceInfo, ResourceStatus) {
+			return cpuResourceInfo{}, ResourceStatus{}
 		},
-		GPU: func() resource.GPUInfo {
-			return resource.GPUInfo{Names: []string{}}
+		GPU: func() (gpuResourceReading, ResourceStatus) {
+			return gpuResourceReading{Info: resource.GPUInfo{Names: []string{}}}, ResourceStatus{}
 		},
-		ThreadCount: func() int {
-			return 0
+		ThreadCount: func() (int, ResourceStatus) {
+			return 0, ResourceStatus{}
 		},
-		PortCount: func() int {
-			return 0
+		PortCount: func() (int, ResourceStatus) {
+			return 0, ResourceStatus{}
 		},
 	}
 	t.Cleanup(func() {

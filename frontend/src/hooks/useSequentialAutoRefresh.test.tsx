@@ -2,7 +2,7 @@ import {StrictMode} from 'react';
 import type {ReactNode} from 'react';
 import {act, cleanup, renderHook} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {useSequentialAutoRefresh} from './useSequentialAutoRefresh';
+import {PageActivityContext, useSequentialAutoRefresh} from './useSequentialAutoRefresh';
 
 function deferredRefresh() {
     let resolve!: () => void;
@@ -49,6 +49,24 @@ describe('useSequentialAutoRefresh', () => {
         await setVisibility('visible');
         expect(loader).toHaveBeenCalledTimes(2);
         expect(loader).toHaveBeenLastCalledWith(false);
+        expect(vi.getTimerCount()).toBe(1);
+    });
+
+    it('stops inactive pages and resumes polling without unmounting', async () => {
+        let active = true;
+        const loader = vi.fn().mockResolvedValue(undefined);
+        const wrapper = ({children}: {children: ReactNode}) => <PageActivityContext.Provider value={active}>{children}</PageActivityContext.Provider>;
+        const {rerender} = renderHook(() => useSequentialAutoRefresh(loader, 5000), {wrapper});
+        await act(async () => {});
+        active = false;
+        rerender();
+        expect(vi.getTimerCount()).toBe(0);
+        await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+        expect(loader).toHaveBeenCalledTimes(1);
+        active = true;
+        rerender();
+        await act(async () => {});
+        expect(loader).toHaveBeenCalledTimes(2);
         expect(vi.getTimerCount()).toBe(1);
     });
 

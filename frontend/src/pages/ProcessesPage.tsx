@@ -3,6 +3,8 @@ import type {KeyboardEvent, MouseEvent} from 'react';
 import ProcessNameCell from '../components/ProcessNameCell';
 import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
+import RefreshControls from '../components/RefreshControls';
+import {operationText, operationVariant, type OperationVariant} from '../services/operations';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {formatMemorySize, formatPercent, isHighMemoryUsage} from '../services/systemResources';
 import {isCommonDevelopmentPort, loadPortList} from '../services/ports';
@@ -20,6 +22,7 @@ interface ProcessesPageProps {
 }
 
 interface KillTarget {
+    createdAt: number;
     pid: number;
     name: string;
     path: string;
@@ -41,7 +44,10 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
     const [sortKey, setSortKey] = useState<ProcessSortKey>('memory');
     const [isLoading, setIsLoading] = useState(false);
     const [isKilling, setIsKilling] = useState(false);
+    const [relatedUpdated, setRelatedUpdated] = useState<number>();
+    const [lastUpdated, setLastUpdated] = useState<number>();
     const [errorMessage, setErrorMessage] = useState('');
+    const [operationStatus, setOperationStatus] = useState<OperationVariant>('success');
     const [operationMessage, setOperationMessage] = useState('');
     const [processToKill, setProcessToKill] = useState<KillTarget | null>(null);
     const [selectedDetailPID, setSelectedDetailPID] = useState<number | null>(null);
@@ -57,22 +63,20 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
         setErrorMessage('');
 
         try {
-            const [nextProcesses, nextPorts] = await Promise.all([
-                loadProcessList(),
-                loadPortList().catch((): PortInfo[] => []),
-            ]);
-            setProcesses(nextProcesses);
-            setProcessPorts(nextPorts);
+            const [primary, related] = await Promise.allSettled([loadProcessList(), loadPortList()]);
+            if (primary.status === 'rejected') throw primary.reason;
+            setProcesses(primary.value);
+            if (related.status === 'fulfilled') { setProcessPorts(related.value); setRelatedUpdated(Date.now()); }
+            else setErrorMessage(t('refresh.relatedError') + (relatedUpdated ? ' ' + t('dashboard.lastUpdated') + ': ' + new Date(relatedUpdated).toLocaleTimeString() : ' ' + t('common.unavailable')));
+            setLastUpdated(Date.now());
         } catch {
-            setProcesses([]);
-            setProcessPorts([]);
             setErrorMessage(t('processes.error'));
         } finally {
             if (showLoading) {
                 setIsLoading(false);
             }
         }
-    }, [t]);
+    }, [t, relatedUpdated]);
 
     useSequentialAutoRefresh(loadProcesses, processRefreshIntervalMs);
 
@@ -117,6 +121,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
 
     const openDetailKillConfirmation = (detail: ProcessDetail) => {
         openKillConfirmation({
+            createdAt: detail.createdAt,
             pid: detail.pid,
             name: detail.processName,
             path: detail.executablePath,
@@ -127,6 +132,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
 
     const openRowKillConfirmation = (process: ProcessInfo) => {
         openKillConfirmation({
+            createdAt: process.createdAt,
             pid: process.pid,
             name: process.name,
             path: process.path,
@@ -207,10 +213,12 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
         setErrorMessage('');
 
         try {
-            const result = await killProcessByPID(target.pid);
-            setOperationMessage(result.message);
+            const result = await killProcessByPID(target.pid, target.createdAt);
+            setOperationStatus(operationVariant(result));
+            setOperationMessage(operationText(result, t));
             setProcessToKill(null);
 
+            if (result.code === 'identity_changed') { await loadProcesses(false); closeProcessDetail(); }
             if (result.success) {
                 await loadProcesses(false);
                 if (selectedDetailPID === target.pid) {
@@ -218,6 +226,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
                 }
             }
         } catch {
+            setOperationStatus('error');
             setOperationMessage(t('processes.killError'));
         } finally {
             setIsKilling(false);
@@ -252,6 +261,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
+            <RefreshControls t={t} updatedAt={lastUpdated}/>
             <div className="resource-toolbar process-toolbar">
                 <label className="filter-field">
                     <span>{t('filter.processName')}</span>
@@ -298,7 +308,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
             </div>
 
             {errorMessage && <StatusMessage variant="error">{errorMessage}</StatusMessage>}
-            {operationMessage && <StatusMessage variant="success">{operationMessage}</StatusMessage>}
+            {operationMessage && <StatusMessage variant={operationStatus}>{operationMessage}</StatusMessage>}
             {isLoading && processes.length === 0 && (
                 <StatusMessage variant="loading">{t('processes.loading')}</StatusMessage>
             )}
@@ -331,7 +341,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
                                     const commandLine = process.commandLine || t('common.unavailable');
                                     const path = process.path || t('common.unavailable');
                                     const isSelected = selectedDetailPID === process.pid || contextMenu?.process.pid === process.pid;
-                                    const ownedPorts = portsByPID.get(process.pid) ?? [];
+                                    const ownedPorts = (portsByPID.get(process.pid) ?? []).filter(port => port.createdAt === process.createdAt);
 
                                     return (
                                         <tr
@@ -357,7 +367,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
                                                 {formatMemorySize(process.memoryBytes)}
                                                 {isHighMemoryUsage(process.memoryBytes) && <span className="memory-badge">{t('badge.high')}</span>}
                                             </td>
-                                            <td className="mono">{renderProcessPorts(ownedPorts, t)}</td>
+                                            <td className="mono">{relatedUpdated ? renderProcessPorts(ownedPorts, t) : t('common.unavailable')}</td>
                                             <td>
                                                 <span className={process.isProtected ? 'protected-badge' : 'standard-badge'}>
                                                     {process.isProtected ? t('badge.protected') : t('badge.standard')}
@@ -562,6 +572,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
                             </button>
                         </div>
                         <dl className="confirmation-details">
+                            <div><dt>{t('field.processCreatedAt')}</dt><dd>{processToKill.createdAt > 0 ? new Date(processToKill.createdAt).toLocaleString() : t('common.unavailable')}</dd></div>
                             <div>
                                 <dt>{t('field.pid')}</dt>
                                 <dd className="mono">{processToKill.pid}</dd>

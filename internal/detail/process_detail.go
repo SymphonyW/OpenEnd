@@ -31,6 +31,7 @@ var developmentProcessKeywords = []string{
 
 // ProcessSnapshot is the raw per-process detail collected before aggregation.
 type ProcessSnapshot struct {
+	CreatedAt           int64
 	PID                 int32
 	ProcessName         string
 	IconDataURL         string
@@ -52,6 +53,7 @@ type ProcessPort struct {
 
 // ProcessDetail is the process detail payload returned to the frontend.
 type ProcessDetail struct {
+	CreatedAt           int64                 `json:"createdAt"`
 	PID                 int32                 `json:"pid"`
 	ProcessName         string                `json:"processName"`
 	IconDataURL         string                `json:"iconDataURL"`
@@ -72,6 +74,7 @@ type ProcessDetail struct {
 // BuildProcessDetail combines a process snapshot with current ports and recent logs.
 func BuildProcessDetail(snapshot ProcessSnapshot, ports []portscanner.Info, logs []config.OperationLog, portsError string, logsError string) ProcessDetail {
 	return ProcessDetail{
+		CreatedAt:           snapshot.CreatedAt,
 		PID:                 snapshot.PID,
 		ProcessName:         strings.TrimSpace(snapshot.ProcessName),
 		IconDataURL:         strings.TrimSpace(snapshot.IconDataURL),

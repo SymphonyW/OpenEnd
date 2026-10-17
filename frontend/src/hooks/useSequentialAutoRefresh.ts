@@ -1,8 +1,11 @@
-import {useEffect, useRef} from 'react';
+import {createContext, useContext, useEffect, useRef} from 'react';
+
+export const PageActivityContext = createContext(true);
 
 export type AutoRefreshLoader = (showLoading?: boolean) => Promise<void> | void;
 
 export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: number) {
+    const active = useContext(PageActivityContext);
     const loaderRef = useRef(loader);
     const activeRefreshRef = useRef<Promise<void> | null>(null);
 
@@ -11,6 +14,7 @@ export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: 
     }, [loader]);
 
     useEffect(() => {
+        if (!active) return;
         let isDisposed = false;
         let timerId: number | undefined;
 
@@ -78,5 +82,5 @@ export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: 
             clearScheduledRefresh();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [intervalMs]);
+    }, [intervalMs, active]);
 }

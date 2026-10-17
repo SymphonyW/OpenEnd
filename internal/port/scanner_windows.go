@@ -17,6 +17,7 @@ import (
 )
 
 type processInfo struct {
+	createdAt   int64
 	name        string
 	path        string
 	isProtected bool
@@ -74,10 +75,6 @@ func ListWithProtector(ctx context.Context, protector processscanner.Protector) 
 		return ports[i].Status < ports[j].Status
 	})
 
-	if len(ports) == 0 {
-		return nil, fmt.Errorf("scan Windows ports: no TCP or UDP entries were readable; try running as administrator if Windows denied access to connection tables")
-	}
-
 	return ports, nil
 }
 
@@ -95,6 +92,7 @@ func appendConnections(ports []Info, connections []gopsnet.ConnectionStat, proto
 		}
 
 		if process, ok := processes[connection.Pid]; ok {
+			info.CreatedAt = process.createdAt
 			info.ProcessName = process.name
 			info.ProcessPath = process.path
 			info.IsProtected = process.isProtected
@@ -130,6 +128,7 @@ func buildProcessIndex(ctx context.Context, protector processscanner.Protector, 
 		}
 
 		info := processInfo{}
+		info.createdAt, _ = process.CreateTimeWithContext(ctx)
 		if name, err := process.NameWithContext(ctx); err == nil {
 			info.name = strings.TrimSpace(name)
 			info.isProtected = protector.IsProtectedName(info.name)

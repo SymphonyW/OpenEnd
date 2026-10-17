@@ -32,8 +32,8 @@ export function GetRecentOperationLogsForResource(arg1:number,arg2:string,arg3:A
 
 export function GetSystemResourceInfo():Promise<main.SystemResourceInfo>;
 
-export function KillProcessByPID(arg1:number):Promise<process.OperationResult>;
+export function KillProcessByPID(arg1:number,arg2:number):Promise<process.OperationResult>;
 
-export function KillProcessByPort(arg1:number,arg2:string):Promise<process.OperationResult>;
+export function KillProcessByPort(arg1:number,arg2:string,arg3:number,arg4:number):Promise<process.OperationResult>;
 
 export function SetCleanupRuleEnabled(arg1:string,arg2:boolean):Promise<Array<config.CleanupRule>>;

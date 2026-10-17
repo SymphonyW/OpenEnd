@@ -160,6 +160,7 @@ export namespace detail {
 	    }
 	}
 	export class ProcessDetail {
+	    createdAt: number;
 	    pid: number;
 	    processName: string;
 	    iconDataURL: string;
@@ -182,6 +183,7 @@ export namespace detail {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.createdAt = source["createdAt"];
 	        this.pid = source["pid"];
 	        this.processName = source["processName"];
 	        this.iconDataURL = source["iconDataURL"];
@@ -222,7 +224,24 @@ export namespace detail {
 
 export namespace main {
 	
+	export class ResourceStatus {
+	    state: string;
+	    updatedAt: number;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ResourceStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.updatedAt = source["updatedAt"];
+	        this.error = source["error"];
+	    }
+	}
 	export class SystemResourceInfo {
+	    metrics: Record<string, ResourceStatus>;
 	    cpuPercent: number;
 	    cpuName: string;
 	    cpuPhysicalCores: number;
@@ -247,6 +266,7 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.metrics = this.convertValues(source["metrics"], ResourceStatus, true);
 	        this.cpuPercent = source["cpuPercent"];
 	        this.cpuName = source["cpuName"];
 	        this.cpuPhysicalCores = source["cpuPhysicalCores"];
@@ -265,6 +285,24 @@ export namespace main {
 	        this.portCount = source["portCount"];
 	        this.uptimeSeconds = source["uptimeSeconds"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -272,6 +310,7 @@ export namespace main {
 export namespace port {
 	
 	export class Info {
+	    createdAt: number;
 	    port: number;
 	    protocol: string;
 	    status: string;
@@ -286,6 +325,7 @@ export namespace port {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.createdAt = source["createdAt"];
 	        this.port = source["port"];
 	        this.protocol = source["protocol"];
 	        this.status = source["status"];
@@ -301,6 +341,7 @@ export namespace port {
 export namespace process {
 	
 	export class Info {
+	    createdAt: number;
 	    pid: number;
 	    name: string;
 	    iconDataURL: string;
@@ -317,6 +358,7 @@ export namespace process {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.createdAt = source["createdAt"];
 	        this.pid = source["pid"];
 	        this.name = source["name"];
 	        this.iconDataURL = source["iconDataURL"];
@@ -329,6 +371,8 @@ export namespace process {
 	    }
 	}
 	export class OperationResult {
+	    partial: boolean;
+	    code: string;
 	    success: boolean;
 	    message: string;
 	    pid: number;
@@ -340,6 +384,8 @@ export namespace process {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.partial = source["partial"];
+	        this.code = source["code"];
 	        this.success = source["success"];
 	        this.message = source["message"];
 	        this.pid = source["pid"];

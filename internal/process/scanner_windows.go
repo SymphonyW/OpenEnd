@@ -52,6 +52,7 @@ func ListWithProtector(ctx context.Context, protector Protector) ([]Info, error)
 		}
 
 		info := Info{PID: pid}
+		info.CreatedAt, _ = process.CreateTimeWithContext(ctx)
 		seenPIDs[pid] = struct{}{}
 
 		if name, err := process.NameWithContext(ctx); err == nil {

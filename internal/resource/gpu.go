@@ -8,6 +8,7 @@ import (
 
 // GPUInfo is a best-effort snapshot of GPU engine and dedicated VRAM usage.
 type GPUInfo struct {
+	Errors         map[string]string
 	GPUPercent     float64
 	Names          []string
 	TotalVRAMBytes uint64

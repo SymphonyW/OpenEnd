@@ -19,6 +19,8 @@ type portKillOperations interface {
 
 type gopsutilPortKillOperations struct {
 	protector processscanner.Protector
+	createdAt int64
+	confirmed bool
 }
 
 func (gopsutilPortKillOperations) connectionsWithContext(ctx context.Context, protocol string) ([]gopsnet.ConnectionStat, error) {
@@ -26,11 +28,18 @@ func (gopsutilPortKillOperations) connectionsWithContext(ctx context.Context, pr
 }
 
 func (ops gopsutilPortKillOperations) killProcessByPID(ctx context.Context, pid int) processscanner.OperationResult {
+	if ops.confirmed {
+		return processscanner.KillConfirmedByPIDWithProtector(ctx, pid, ops.createdAt, ops.protector)
+	}
 	if ops.protector != nil {
 		return processscanner.KillByPIDWithProtector(ctx, pid, ops.protector)
 	}
 
 	return processscanner.KillByPID(ctx, pid)
+}
+
+func KillConfirmedProcessByPortWithProtector(ctx context.Context, port int, protocol string, expectedPID int, createdAt int64, protector processscanner.Protector) processscanner.OperationResult {
+	return killProcessByPort(ctx, port, protocol, gopsutilPortKillOperations{protector: protector, createdAt: createdAt, confirmed: true}, expectedPID)
 }
 
 // KillProcessByPort resolves the current port owner PID and ends that process if it is allowed.
@@ -43,7 +52,7 @@ func KillProcessByPortWithProtector(ctx context.Context, port int, protocol stri
 	return killProcessByPort(ctx, port, protocol, gopsutilPortKillOperations{protector: protector})
 }
 
-func killProcessByPort(ctx context.Context, port int, protocol string, ops portKillOperations) processscanner.OperationResult {
+func killProcessByPort(ctx context.Context, port int, protocol string, ops portKillOperations, expectedPID ...int) processscanner.OperationResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -53,7 +62,7 @@ func killProcessByPort(ctx context.Context, port int, protocol string, ops portK
 		result.Message = fmt.Sprintf("Unable to end process occupying port %d/%s: %v", port, strings.ToUpper(strings.TrimSpace(protocol)), err)
 		return result
 	}
-	if port <= 0 {
+	if port <= 0 || port > 65535 {
 		result.Message = fmt.Sprintf("Port %d is invalid.", port)
 		return result
 	}
@@ -71,6 +80,9 @@ func killProcessByPort(ctx context.Context, port int, protocol string, ops portK
 	}
 
 	pids := uniquePIDsForPort(connections, port)
+	if len(expectedPID) > 0 && (len(pids) != 1 || int(pids[0]) != expectedPID[0]) {
+		return processscanner.IdentityChanged(expectedPID[0])
+	}
 	if len(pids) == 0 {
 		result.Message = fmt.Sprintf("No %s process found on port %d.", protocolLabel, port)
 		return result

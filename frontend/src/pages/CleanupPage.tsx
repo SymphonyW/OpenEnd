@@ -3,12 +3,14 @@ import type {KeyboardEvent} from 'react';
 import ProcessNameCell from '../components/ProcessNameCell';
 import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
+import RefreshControls from '../components/RefreshControls';
+import {operationText, operationVariant, type OperationVariant} from '../services/operations';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {buildCleanupCandidates, formatCleanupRuleNames, formatCleanupRuleReasons} from '../services/cleanup';
 import {loadRecentOperationLogsForResource} from '../services/logs';
 import {isCommonDevelopmentPort, loadPortList} from '../services/ports';
 import {killProcessByPID, loadProcessList} from '../services/processes';
-import {loadCleanupRules} from '../services/settings';
+import {addCustomProtectedProcessName, loadCleanupRules} from '../services/settings';
 import {formatMemorySize, formatPercent, isHighMemoryUsage} from '../services/systemResources';
 import type {Translator} from '../services/i18n';
 import type {CleanupCandidate} from '../types/cleanup';
@@ -29,10 +31,14 @@ function CleanupPage({page, t}: CleanupPageProps) {
     const [processes, setProcesses] = useState<ProcessInfo[]>([]);
     const [ports, setPorts] = useState<PortInfo[]>([]);
     const [cleanupRules, setCleanupRules] = useState<CleanupRule[]>([]);
-    const [selectedPIDs, setSelectedPIDs] = useState<Set<number>>(new Set());
+    const [selectedPIDs, setSelectedPIDs] = useState<Set<string>>(new Set());
+    const [ignored, setIgnored] = useState<Set<string>>(new Set());
+    const [batchCandidates, setBatchCandidates] = useState<CleanupCandidate[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isKilling, setIsKilling] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState<number>();
     const [errorMessage, setErrorMessage] = useState('');
+    const [operationStatus, setOperationStatus] = useState<OperationVariant>('success');
     const [operationMessage, setOperationMessage] = useState('');
     const [isConfirmingBatch, setIsConfirmingBatch] = useState(false);
     const [candidateToKill, setCandidateToKill] = useState<CleanupCandidate | null>(null);
@@ -55,10 +61,8 @@ function CleanupPage({page, t}: CleanupPageProps) {
             setProcesses(nextProcesses);
             setPorts(nextPorts);
             setCleanupRules(nextCleanupRules);
+            setLastUpdated(Date.now());
         } catch {
-            setProcesses([]);
-            setPorts([]);
-            setCleanupRules([]);
             setErrorMessage(t('cleanup.error'));
         } finally {
             if (showLoading) {
@@ -70,17 +74,17 @@ function CleanupPage({page, t}: CleanupPageProps) {
     useSequentialAutoRefresh(loadCleanupData, cleanupRefreshIntervalMs);
 
     const candidates = useMemo(() => {
-        return buildCleanupCandidates(processes, ports, cleanupRules);
-    }, [cleanupRules, ports, processes]);
+        return buildCleanupCandidates(processes, ports, cleanupRules).filter(candidate => !ignored.has(candidateIdentity(candidate)));
+    }, [cleanupRules, ports, processes, ignored]);
 
     useEffect(() => {
         setSelectedPIDs((currentSelectedPIDs) => {
             const selectablePIDs = new Set(
                 candidates
                     .filter((candidate) => !candidate.isProtected)
-                    .map((candidate) => candidate.pid),
+                    .map(candidateIdentity),
             );
-            const nextSelectedPIDs = new Set<number>();
+            const nextSelectedPIDs = new Set<string>();
             currentSelectedPIDs.forEach((pid) => {
                 if (selectablePIDs.has(pid)) {
                     nextSelectedPIDs.add(pid);
@@ -92,7 +96,7 @@ function CleanupPage({page, t}: CleanupPageProps) {
     }, [candidates]);
 
     const selectedCandidates = useMemo(() => {
-        return candidates.filter((candidate) => selectedPIDs.has(candidate.pid));
+        return candidates.filter((candidate) => selectedPIDs.has(candidateIdentity(candidate)));
     }, [candidates, selectedPIDs]);
 
     const selectedCandidate = useMemo(() => {
@@ -164,10 +168,10 @@ function CleanupPage({page, t}: CleanupPageProps) {
 
         setSelectedPIDs((currentSelectedPIDs) => {
             const nextSelectedPIDs = new Set(currentSelectedPIDs);
-            if (nextSelectedPIDs.has(candidate.pid)) {
-                nextSelectedPIDs.delete(candidate.pid);
+            if (nextSelectedPIDs.has(candidateIdentity(candidate))) {
+                nextSelectedPIDs.delete(candidateIdentity(candidate));
             } else {
-                nextSelectedPIDs.add(candidate.pid);
+                nextSelectedPIDs.add(candidateIdentity(candidate));
             }
 
             return nextSelectedPIDs;
@@ -201,6 +205,7 @@ function CleanupPage({page, t}: CleanupPageProps) {
     const openBatchConfirmation = () => {
         setOperationMessage('');
         if (selectedCandidates.length > 0) {
+            setBatchCandidates([...selectedCandidates]);
             setIsConfirmingBatch(true);
         }
     };
@@ -209,6 +214,18 @@ function CleanupPage({page, t}: CleanupPageProps) {
         if (!isKilling) {
             setIsConfirmingBatch(false);
         }
+    };
+
+    const protectCandidate = async (candidate: CleanupCandidate) => {
+        setIsKilling(true);
+        try {
+            await addCustomProtectedProcessName(candidate.name);
+            setProcesses(current => current.map(process => process.name.toLowerCase() === candidate.name.toLowerCase() ? {...process, isProtected: true} : process));
+            setOperationStatus('success'); setOperationMessage(t('cleanup.protected'));
+            await loadCleanupData(false);
+        } catch (error) {
+            setOperationStatus('error'); setOperationMessage(String(error));
+        } finally { setIsKilling(false); }
     };
 
     const confirmSingleKill = async () => {
@@ -221,14 +238,16 @@ function CleanupPage({page, t}: CleanupPageProps) {
         setErrorMessage('');
 
         try {
-            const result = await killProcessByPID(target.pid);
-            setOperationMessage(result.message);
+            const result = await killProcessByPID(target.pid, target.createdAt);
+            setOperationStatus(operationVariant(result));
+            setOperationMessage(operationText(result, t));
             setCandidateToKill(null);
 
+            if (result.code === 'identity_changed') { closeCleanupDetail(); await loadCleanupData(false); }
             if (result.success) {
                 setSelectedPIDs((currentSelectedPIDs) => {
                     const nextSelectedPIDs = new Set(currentSelectedPIDs);
-                    nextSelectedPIDs.delete(target.pid);
+                    nextSelectedPIDs.delete(candidateIdentity(target));
                     return nextSelectedPIDs;
                 });
                 if (selectedDetailPID === target.pid) {
@@ -239,6 +258,7 @@ function CleanupPage({page, t}: CleanupPageProps) {
                 await loadCleanupData(false);
             }
         } catch {
+            setOperationStatus('error');
             setOperationMessage(t('processes.killError'));
         } finally {
             setIsKilling(false);
@@ -246,33 +266,37 @@ function CleanupPage({page, t}: CleanupPageProps) {
     };
 
     const confirmBatchKill = async () => {
-        if (selectedCandidates.length === 0) {
-            return;
-        }
+        if (batchCandidates.length === 0) { return; }
 
-        const candidatesToKill = [...selectedCandidates];
+        const candidatesToKill = batchCandidates;
         setIsKilling(true);
         setErrorMessage('');
 
         let successCount = 0;
         let failureCount = 0;
+        let partialCount = 0;
+        const failures: string[] = [];
 
         for (const candidate of candidatesToKill) {
             try {
-                const result = await killProcessByPID(candidate.pid);
+                const result = await killProcessByPID(candidate.pid, candidate.createdAt);
                 if (result.success) {
                     successCount += 1;
+                    if (result.partial) { partialCount++; failures.push(`${candidate.name} (PID ${candidate.pid}): ${operationText(result, t)}`); }
                 } else {
                     failureCount += 1;
+                    failures.push(`${candidate.name} (PID ${candidate.pid}): ${operationText(result, t)}`);
                 }
             } catch {
                 failureCount += 1;
+                failures.push(`${candidate.name} (PID ${candidate.pid}): ${t('processes.killError')}`);
             }
         }
 
         setIsConfirmingBatch(false);
         setSelectedPIDs(new Set());
-        setOperationMessage(`${candidatesToKill.length} ${t('cleanup.operationSummary')} ${successCount} ${t('operation.succeeded')}, ${failureCount} ${t('operation.failed')}.`);
+        setOperationStatus(failureCount === candidatesToKill.length ? 'error' : failureCount > 0 || partialCount > 0 ? 'warning' : 'success');
+        setOperationMessage((failureCount > 0 && successCount > 0 ? t('operation.partial') + ': ' : '') + `${candidatesToKill.length} ${t('cleanup.operationSummary')} ${successCount} ${t('operation.succeeded')}, ${failureCount} ${t('operation.failed')}.` + (partialCount ? ` ${partialCount} ${t('operation.partial')}.` : '') + (failures.length ? '\n' + failures.join('\n') : ''));
 
         try {
             await loadCleanupData(false);
@@ -286,6 +310,9 @@ function CleanupPage({page, t}: CleanupPageProps) {
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
+            <RefreshControls t={t} updatedAt={lastUpdated}/>
+            <p className="refresh-controls">{t('cleanup.notice')}</p>
+            {ignored.size > 0 && <button type="button" className="sort-button" onClick={() => setIgnored(new Set())}>{t('cleanup.restore')} ({ignored.size})</button>}
             <div className="resource-toolbar cleanup-toolbar" role="toolbar" aria-label={t('cleanup.actions')}>
                 <div className="cleanup-toolbar-stats">
                     <div className="cleanup-toolbar-stat">
@@ -308,7 +335,7 @@ function CleanupPage({page, t}: CleanupPageProps) {
             </div>
 
             {errorMessage && <StatusMessage variant="error">{errorMessage}</StatusMessage>}
-            {operationMessage && <StatusMessage variant="success">{operationMessage}</StatusMessage>}
+            {operationMessage && <StatusMessage variant={operationStatus}><span className="operation-details">{operationMessage}</span></StatusMessage>}
             {isLoading && candidates.length === 0 && (
                 <StatusMessage variant="loading">{t('cleanup.loading')}</StatusMessage>
             )}
@@ -335,7 +362,7 @@ function CleanupPage({page, t}: CleanupPageProps) {
                                     <th>{t('field.memory')}</th>
                                     <th>{t('field.ports')}</th>
                                     <th>{t('field.rule')}</th>
-                                    <th>{t('field.reason')}</th>
+                                    <th>{t('field.reason')}</th><th>{t('field.actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -354,7 +381,7 @@ function CleanupPage({page, t}: CleanupPageProps) {
                                             <td>
                                                 <input
                                                     aria-label={`${t('cleanup.selectProcess')} ${candidate.name || t('common.unknown')} PID ${candidate.pid}`}
-                                                    checked={selectedPIDs.has(candidate.pid)}
+                                                    checked={selectedPIDs.has(candidateIdentity(candidate))}
                                                     disabled={candidate.isProtected || isKilling}
                                                     type="checkbox"
                                                     onClick={(event) => event.stopPropagation()}
@@ -390,6 +417,10 @@ function CleanupPage({page, t}: CleanupPageProps) {
                                             <td title={formatCleanupRuleReasons(candidate)}>
                                                 <span className="reason-cell">{formatCleanupRuleReasons(candidate)}</span>
                                             </td>
+                                            <td><div className="candidate-actions">
+                                                <button type="button" className="sort-button" disabled={isKilling} onClick={event => { event.stopPropagation(); setIgnored(current => new Set(current).add(candidateIdentity(candidate))); }}>{t('cleanup.ignore')}</button>
+                                                <button type="button" className="sort-button" disabled={isKilling || !candidate.name} onClick={event => { event.stopPropagation(); void protectCandidate(candidate); }}>{t('cleanup.protect')}</button>
+                                            </div></td>
                                         </tr>
                                     );
                                 })}
@@ -518,6 +549,7 @@ function CleanupPage({page, t}: CleanupPageProps) {
                             </button>
                         </div>
                         <dl className="confirmation-details">
+                            <div><dt>{t('field.processCreatedAt')}</dt><dd>{candidateToKill.createdAt > 0 ? new Date(candidateToKill.createdAt).toLocaleString() : t('common.unavailable')}</dd></div>
                             <div>
                                 <dt>{t('field.pid')}</dt>
                                 <dd className="mono">{candidateToKill.pid}</dd>
@@ -576,9 +608,9 @@ function CleanupPage({page, t}: CleanupPageProps) {
                                 {t('common.close')}
                             </button>
                         </div>
-                        <p className="dialog-summary">{selectedCandidates.length} {t('cleanup.dialog.summary')}</p>
+                        <p className="dialog-summary">{batchCandidates.length} {t('cleanup.dialog.summary')}</p>
                         <dl className="confirmation-details">
-                            {selectedCandidates.map((candidate) => (
+                            {batchCandidates.map((candidate) => (
                                 <div key={candidate.pid}>
                                     <dt className="mono">{candidate.pid}</dt>
                                     <dd>
@@ -612,6 +644,8 @@ function CleanupPage({page, t}: CleanupPageProps) {
         </section>
     );
 }
+
+function candidateIdentity(candidate: CleanupCandidate): string { return `${candidate.pid}:${candidate.createdAt}`; }
 
 function formatPorts(ports: number[], t: Translator): string {
     if (ports.length === 0) {

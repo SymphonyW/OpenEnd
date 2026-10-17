@@ -419,3 +419,9 @@ button:disabled { cursor: default; opacity: .45; }
     .feedback-content { grid-template-columns: minmax(0, 1fr); gap: 28px; }
     .feedback-details > div { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 }
+
+.workspace-body[hidden] { display: none; }
+.status-message.warning { border-color: var(--warning); background: var(--warning-soft); color: var(--warning); }
+.refresh-controls { display: flex; align-items: center; gap: 12px; padding: 8px 16px; font-size: 12px; color: var(--text-muted); }
+.candidate-actions { display: flex; gap: 6px; }
+.operation-details { white-space: pre-wrap; }

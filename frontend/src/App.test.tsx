@@ -2,6 +2,7 @@ import {readFileSync} from 'node:fs';
 import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import App from './App';
+import type {SystemResourceInfo} from './types/systemResources';
 
 const appStyles = readFileSync('src/App.css', 'utf8');
 
@@ -35,8 +36,8 @@ vi.mock('../wailsjs/go/main/App', () => ({
     GetProtectionSettings: () => getProtectionSettingsMock(),
     GetRecentOperationLogsForResource: (pid: number, processName: string, ports: number[]) => getRecentOperationLogsForResourceMock(pid, processName, ports),
     GetSystemResourceInfo: () => getSystemResourceInfoMock(),
-    KillProcessByPID: (pid: number) => killProcessByPIDMock(pid),
-    KillProcessByPort: (port: number, protocol: string) => killProcessByPortMock(port, protocol),
+    KillProcessByPID: (pid: number, createdAt: number) => killProcessByPIDMock(pid, createdAt),
+    KillProcessByPort: (port: number, protocol: string, pid: number, createdAt: number) => killProcessByPortMock(port, protocol, pid, createdAt),
     SetCleanupRuleEnabled: (id: string, enabled: boolean) => setCleanupRuleEnabledMock(id, enabled),
 }));
 
@@ -64,6 +65,7 @@ const nodeIconDataURL = 'data:image/png;base64,node-icon';
 const processRows = [
     {
         pid: 4,
+        createdAt: 1000,
         name: 'System',
         iconDataURL: '',
         path: '',
@@ -75,6 +77,7 @@ const processRows = [
     },
     {
         pid: 100,
+        createdAt: 1000,
         name: 'node.exe',
         iconDataURL: nodeIconDataURL,
         path: 'C:\\Program Files\\nodejs\\node.exe',
@@ -86,6 +89,7 @@ const processRows = [
     },
     {
         pid: 200,
+        createdAt: 1000,
         name: 'postgres.exe',
         iconDataURL: '',
         path: 'C:\\PostgreSQL\\bin\\postgres.exe',
@@ -97,6 +101,7 @@ const processRows = [
     },
     {
         pid: 500,
+        createdAt: 1000,
         name: 'vmmem',
         iconDataURL: '',
         path: '',
@@ -108,6 +113,7 @@ const processRows = [
     },
     {
         pid: 600,
+        createdAt: 1000,
         name: 'chrome.exe',
         iconDataURL: '',
         path: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -125,6 +131,7 @@ const portRows = [
         protocol: 'TCP',
         status: 'LISTEN',
         pid: 100,
+        createdAt: 1000,
         processName: 'node.exe',
         processPath: 'C:\\Program Files\\nodejs\\node.exe',
         isProtected: false,
@@ -134,6 +141,7 @@ const portRows = [
         protocol: 'TCP',
         status: 'LISTEN',
         pid: 200,
+        createdAt: 1000,
         processName: 'postgres.exe',
         processPath: 'C:\\PostgreSQL\\bin\\postgres.exe',
         isProtected: false,
@@ -143,6 +151,7 @@ const portRows = [
         protocol: 'UDP',
         status: 'LISTEN',
         pid: 300,
+        createdAt: 1000,
         processName: 'dns-sd.exe',
         processPath: '',
         isProtected: false,
@@ -152,6 +161,7 @@ const portRows = [
         protocol: 'TCP',
         status: 'ESTABLISHED',
         pid: 400,
+        createdAt: 1000,
         processName: 'custom-api.exe',
         processPath: 'C:\\dev\\custom-api.exe',
         isProtected: false,
@@ -161,6 +171,7 @@ const portRows = [
         protocol: 'TCP',
         status: 'LISTEN',
         pid: 456,
+        createdAt: 1000,
         processName: 'svchost.exe',
         processPath: 'C:\\Windows\\System32\\svchost.exe',
         isProtected: true,
@@ -232,6 +243,7 @@ const operationLogs = [
 
 const nodeProcessDetail = {
     pid: 100,
+        createdAt: 1000,
     processName: 'node.exe',
     iconDataURL: nodeIconDataURL,
     executablePath: '',
@@ -257,6 +269,7 @@ const nodeProcessDetail = {
 };
 
 const baseSystemResourceInfo = {
+    metrics: undefined as SystemResourceInfo['metrics'],
     cpuPercent: 42.5,
     cpuName: 'Intel(R) Core(TM) i9-14900HX',
     cpuPhysicalCores: 24,
@@ -707,7 +720,7 @@ describe('App layout navigation', () => {
         expect(within(dialog).getByText('node.exe')).toBeInTheDocument();
         fireEvent.click(within(dialog).getByRole('button', {name: 'Confirm End Process'}));
 
-        await waitFor(() => expect(killProcessByPIDMock).toHaveBeenCalledWith(100));
+        await waitFor(() => expect(killProcessByPIDMock).toHaveBeenCalledWith(100, 1000));
         expect(await screen.findByText('Process node.exe (PID 100) ended.')).toBeInTheDocument();
     });
 
@@ -731,7 +744,7 @@ describe('App layout navigation', () => {
         expect(within(dialog).getByText('C:\\Program Files\\nodejs\\node.exe')).toBeInTheDocument();
         fireEvent.click(within(dialog).getByRole('button', {name: 'Confirm End Process'}));
 
-        await waitFor(() => expect(killProcessByPIDMock).toHaveBeenCalledWith(100));
+        await waitFor(() => expect(killProcessByPIDMock).toHaveBeenCalledWith(100, 1000));
         expect(await screen.findByText('Process node.exe (PID 100) ended.')).toBeInTheDocument();
     });
 
@@ -903,7 +916,7 @@ describe('App layout navigation', () => {
 
         fireEvent.click(within(dialog).getByRole('button', {name: 'Confirm End Occupancy'}));
 
-        await waitFor(() => expect(killProcessByPortMock).toHaveBeenCalledWith(3000, 'TCP'));
+        await waitFor(() => expect(killProcessByPortMock).toHaveBeenCalledWith(3000, 'TCP', 100, 1000));
         expect(await screen.findByText('Process node.exe (PID 100) ended for TCP port 3000.')).toBeInTheDocument();
         expect(screen.queryByRole('dialog', {name: 'Confirm port occupancy termination'})).not.toBeInTheDocument();
         await waitFor(() => expect(getPortListMock).toHaveBeenCalledTimes(2));
@@ -929,7 +942,7 @@ describe('App layout navigation', () => {
         expect(within(dialog).getByText('node.exe')).toBeInTheDocument();
         fireEvent.click(within(dialog).getByRole('button', {name: 'Confirm End Occupancy'}));
 
-        await waitFor(() => expect(killProcessByPortMock).toHaveBeenCalledWith(3000, 'TCP'));
+        await waitFor(() => expect(killProcessByPortMock).toHaveBeenCalledWith(3000, 'TCP', 100, 1000));
         expect(await screen.findByText('Process node.exe (PID 100) ended for TCP port 3000.')).toBeInTheDocument();
     });
 
@@ -1008,7 +1021,7 @@ describe('App layout navigation', () => {
         expect(await screen.findByText('node.exe')).toBeInTheDocument();
         expect(screen.queryByRole('heading', {name: 'Cleanup'})).toBeInTheDocument();
         expect(screen.getByRole('toolbar', {name: 'Cleanup actions'})).toHaveClass('cleanup-toolbar');
-        expect(screen.getByText('Candidates')).toBeInTheDocument();
+        expect(screen.getByText('Development process candidates')).toBeInTheDocument();
         expect(screen.getByText('Selected')).toBeInTheDocument();
         expect(screen.getByText('postgres.exe')).toBeInTheDocument();
         expect(screen.queryByText('vmmem')).not.toBeInTheDocument();
@@ -1082,7 +1095,7 @@ describe('App layout navigation', () => {
         ]);
 
         fireEvent.click(screen.getByRole('button', {name: 'Cleanup'}));
-        expect(await screen.findByText('postgres.exe')).toBeInTheDocument();
+        expect(await within(await screen.findByRole('table', {name: 'Cleanup candidate list'})).findByText('postgres.exe')).toBeInTheDocument();
         expect(getColumnHeaders('Cleanup candidate list')).toEqual([
             'Select',
             'PID',
@@ -1094,6 +1107,7 @@ describe('App layout navigation', () => {
             'Ports',
             'Rule',
             'Reason',
+            'Actions',
         ]);
     });
 
@@ -1109,7 +1123,7 @@ describe('App layout navigation', () => {
         expect(screen.getByLabelText('Port list horizontal scroll')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', {name: 'Cleanup'}));
-        expect(await screen.findByText('postgres.exe')).toBeInTheDocument();
+        expect(await within(await screen.findByRole('table', {name: 'Cleanup candidate list'})).findByText('postgres.exe')).toBeInTheDocument();
         expect(screen.getByLabelText('Cleanup candidate list horizontal scroll')).toBeInTheDocument();
     });
 
@@ -1147,6 +1161,7 @@ describe('App layout navigation', () => {
                 success: true,
                 message: 'Process postgres.exe (PID 200) ended.',
                 pid: 200,
+        createdAt: 1000,
                 processName: 'postgres.exe',
             });
 
@@ -1166,8 +1181,8 @@ describe('App layout navigation', () => {
 
         fireEvent.click(within(dialog).getByRole('button', {name: 'Confirm End Selected'}));
 
-        await waitFor(() => expect(killProcessByPIDMock).toHaveBeenCalledWith(100));
-        await waitFor(() => expect(killProcessByPIDMock).toHaveBeenCalledWith(200));
+        await waitFor(() => expect(killProcessByPIDMock).toHaveBeenCalledWith(100, 1000));
+        await waitFor(() => expect(killProcessByPIDMock).toHaveBeenCalledWith(200, 1000));
         expect(await screen.findByText('2 cleanup operations finished. 2 succeeded, 0 failed.')).toBeInTheDocument();
         await waitFor(() => expect(getProcessListMock.mock.calls.length).toBeGreaterThanOrEqual(2));
         await waitFor(() => expect(getPortListMock.mock.calls.length).toBeGreaterThanOrEqual(2));
@@ -1292,6 +1307,135 @@ describe('App layout navigation', () => {
         expect(screen.getAllByTestId('operation-log-action')[0]).toHaveTextContent('kill_process_by_port');
         expect(getOperationLogsMock).toHaveBeenCalledTimes(2);
     });
+    it.each([
+        [{success: false, message: 'Permission denied', code: 'permission_denied'}, 'error'],
+        [{success: true, partial: true, message: 'Process ended; operation log failed'}, 'warning'],
+    ])('shows the actual operation status and actionable permission errors', async (result, variant) => {
+        killProcessByPIDMock.mockResolvedValue({...result, pid: 100, processName: 'node.exe'});
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        const table = await screen.findByRole('table', {name: 'Process list'});
+        fireEvent.contextMenu(within(table).getByText('node.exe').closest('tr')!);
+        fireEvent.click(screen.getByRole('menuitem', {name: 'End Process'}));
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', {name: 'Confirm End Process'}));
+        const status = await screen.findByRole('alert');
+        expect(status).toHaveClass(variant);
+        if (variant === 'error') expect(status).toHaveTextContent('administrator');
+        expect(killProcessByPIDMock).toHaveBeenCalledWith(100, 1000);
+    });
+
+    it('requires a new confirmation after the port owner changes', async () => {
+        killProcessByPortMock.mockResolvedValue({success: false, code: 'identity_changed', message: 'changed', pid: 200});
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Ports'}));
+        const table = await screen.findByRole('table', {name: 'Port list'});
+        fireEvent.contextMenu(within(table).getByText('node.exe').closest('tr')!);
+        fireEvent.click(screen.getByRole('menuitem', {name: 'End Occupancy'}));
+        getPortListMock.mockResolvedValue([{...portRows[0], pid: 999, createdAt: 2000, processName: 'new-service.exe'}]);
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', {name: 'Confirm End Occupancy'}));
+        expect(await screen.findByRole('alert')).toHaveTextContent('confirm again');
+        expect(await within(table).findByText('new-service.exe')).toBeInTheDocument();
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(killProcessByPortMock).toHaveBeenCalledTimes(1);
+        fireEvent.contextMenu(within(table).getByText('new-service.exe').closest('tr')!);
+        fireEvent.click(screen.getByRole('menuitem', {name: 'End Occupancy'}));
+        expect(within(screen.getByRole('dialog')).getByText('999')).toBeInTheDocument();
+        expect(killProcessByPortMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores candidates for this session and adds process names to protection', async () => {
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Cleanup'}));
+        const table = await screen.findByRole('table', {name: 'Cleanup candidate list'});
+        fireEvent.click(within(within(table).getByText('node.exe').closest('tr')!).getByRole('button', {name: 'Ignore this time'}));
+        expect(within(table).queryByText('node.exe')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: 'Ports'}));
+        await screen.findByRole('table', {name: 'Port list'});
+        fireEvent.click(screen.getByRole('button', {name: 'Cleanup'}));
+        await act(async () => {});
+        expect(within(table).queryByText('node.exe')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: /Restore ignored candidates/}));
+        getProcessListMock.mockResolvedValue(processRows.map(process => process.name === 'node.exe' ? {...process, isProtected: true} : process));
+        fireEvent.click(within(within(table).getByText('node.exe').closest('tr')!).getByRole('button', {name: 'Add to protection'}));
+        await waitFor(() => expect(addCustomProtectedProcessNameMock).toHaveBeenCalledWith('node.exe'));
+        await waitFor(() => expect(within(table).queryByText('node.exe')).not.toBeInTheDocument());
+    });
+
+    it('keeps updating and preserves filters sorting and graph history across navigation', async () => {
+        vi.useFakeTimers();
+        render(<App/>);
+        await act(async () => {});
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        const points = screen.getByLabelText('CPU usage chart').querySelector('polyline')!.getAttribute('points')!.split(' ');
+        const dashboardCalls = getSystemResourceInfoMock.mock.calls.length;
+        expect(screen.queryByRole('button', {name: /Pause refresh|Resume refresh/})).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        await act(async () => {});
+        fireEvent.change(screen.getByLabelText('Process name'), {target: {value: 'node'}});
+        fireEvent.click(screen.getByRole('button', {name: 'CPU'}));
+        const calls = getProcessListMock.mock.calls.length;
+        await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+        expect(getProcessListMock).toHaveBeenCalledTimes(calls + 2);
+        expect(getSystemResourceInfoMock).toHaveBeenCalledTimes(dashboardCalls);
+        fireEvent.click(screen.getByRole('button', {name: 'Performance'}));
+        await act(async () => {});
+        const retainedPoints = screen.getByLabelText('CPU usage chart').querySelector('polyline')!.getAttribute('points')!.split(' ');
+        expect(retainedPoints).toHaveLength(points.length + 1);
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        expect(screen.getByLabelText('Process name')).toHaveValue('node');
+        expect(screen.getByRole('button', {name: 'CPU'})).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.queryByRole('button', {name: /Pause refresh|Resume refresh/})).not.toBeInTheDocument();
+    });
+
+    it('retains process rows and the last successful update time after refresh failure', async () => {
+        vi.useFakeTimers();
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        await act(async () => {});
+        const timestamp = screen.getByText(/Last updated:/).textContent;
+        getProcessListMock.mockRejectedValue(new Error('denied'));
+        await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+        expect(screen.getByRole('alert')).toHaveTextContent('Unable to load');
+        expect(within(screen.getByRole('table', {name: 'Process list'})).getByText('node.exe')).toBeInTheDocument();
+        expect(screen.getByText(/Last updated:/).textContent).toBe(timestamp);
+    });
+
+    it('distinguishes pending unavailable true zero and stale metric readings without charting failed zeroes', async () => {
+        vi.useFakeTimers();
+        getSystemResourceInfoMock.mockResolvedValueOnce(makeSystemResourceInfo({cpuPercent: 0, gpuPercent: 0, metrics: {
+            cpu: {state: 'ready', updatedAt: 1000, error: ''},
+            gpu: {state: 'collecting', updatedAt: 0, error: ''},
+            vram: {state: 'unavailable', updatedAt: 0, error: 'Driver unavailable'},
+        }}));
+        render(<App/>);
+        await act(async () => {});
+        expect(screen.getByRole('button', {name: 'CPU'})).toHaveTextContent('0.0%');
+        expect(screen.getByRole('button', {name: 'GPU'})).toHaveTextContent('Collecting');
+        expect(screen.getByRole('button', {name: 'VRAM'})).toHaveTextContent('Unavailable');
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({cpuPercent: 99, metrics: {cpu: {state: 'unavailable', updatedAt: 0, error: 'Denied'}}}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        expect(screen.getByRole('button', {name: 'CPU'})).toHaveTextContent('0.0%');
+        expect(screen.getByRole('button', {name: 'CPU'})).toHaveTextContent('Last known value');
+        const points = screen.getByLabelText('CPU usage chart').querySelector('polyline')!.getAttribute('points')!.split(' ');
+        expect(points).toHaveLength(1);
+        expect(screen.getByRole('alert')).toHaveTextContent('Denied');
+    });
+
+    it('shows mixed batch results as a partial success with failure details', async () => {
+        killProcessByPIDMock.mockResolvedValueOnce({success: true, message: 'ended'}).mockResolvedValueOnce({success: false, code: 'permission_denied', message: 'Permission denied'});
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Cleanup'}));
+        await screen.findByRole('table', {name: 'Cleanup candidate list'});
+        fireEvent.click(screen.getByLabelText('Select node.exe PID 100'));
+        fireEvent.click(screen.getByLabelText('Select postgres.exe PID 200'));
+        fireEvent.click(screen.getByRole('button', {name: 'End selected processes'}));
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', {name: 'Confirm End Selected'}));
+        const result = await screen.findByRole('alert');
+        expect(result).toHaveClass('warning');
+        expect(result).toHaveTextContent('1 succeeded, 1 failed');
+        expect(result).toHaveTextContent('administrator');
+    });
+
 });
 
 function getColumnHeaders(tableName: string): string[] {

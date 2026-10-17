@@ -1,18 +1,18 @@
-import {useCallback, useState} from 'react';
+import {useCallback, useRef, useState} from 'react';
 import type {MouseEvent} from 'react';
 import StatusMessage from '../components/StatusMessage';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
-import {formatMemorySize, formatPercent, loadSystemResourceInfo} from '../services/systemResources';
+import {formatMemorySize, formatPercent, loadSystemResourceInfo, mergeResourceInfo, resourceStatus} from '../services/systemResources';
 import type {Translator} from '../services/i18n';
 import type {PageDefinition} from '../types/navigation';
-import type {SystemResourceInfo} from '../types/systemResources';
+import type {SystemResourceInfo, ResourceMetric} from '../types/systemResources';
 import './DashboardPage.css';
 
 const refreshInterval = 1000;
 const historyWindow = 60_000;
 const maxHistorySamples = 61;
 type ResourceKey = 'cpu' | 'memory' | 'gpu' | 'vram';
-interface Sample { time: number; cpu: number; memory: number; gpu: number; vram: number; }
+interface Sample { time: number; cpu: number | null; memory: number | null; gpu: number | null; vram: number | null; }
 interface Props { page: PageDefinition; t: Translator; }
 
 const percent = (value: number) => Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
@@ -24,29 +24,24 @@ interface Metric {
 }
 
 function graphPoints(history: Sample[], key: ResourceKey) {
-    if (history.length === 0) {
-        return [];
+    const start = history[0]?.time ?? 0;
+    const end = history[history.length - 1]?.time ?? 0;
+    return history.flatMap((sample, index) => {
+        const value = sample[key];
+        return value === null ? [] : [{x: end > start ? percent((sample.time - start) / (end - start) * 100) : 100, y: 100 - value, value, gap: index > 0 && history[index - 1][key] === null}];
+    });
+}
+function graphSegments(points: ReturnType<typeof graphPoints>) {
+    const segments: typeof points[] = [];
+    for (const point of points) {
+        if (!segments.length || point.gap) segments.push([]);
+        segments[segments.length - 1].push(point);
     }
-    if (history.length === 1) {
-        const sample = history[0];
-        return [{
-            x: 100,
-            y: 100 - sample[key],
-            value: sample[key],
-        }];
-    }
-
-    const start = history[0].time;
-    const end = history[history.length - 1].time;
-    const span = end - start;
-    return history.map(sample => ({
-        x: span > 0 ? percent((sample.time - start) / span * 100) : 0,
-        y: 100 - sample[key],
-        value: sample[key],
-    }));
+    return segments;
 }
 
 function DashboardPage({page, t}: Props) {
+    const infoRef = useRef<SystemResourceInfo | null>(null);
     const [info, setInfo] = useState<SystemResourceInfo | null>(null);
     const [history, setHistory] = useState<Sample[]>([]);
     const [selected, setSelected] = useState<ResourceKey>('cpu');
@@ -55,18 +50,30 @@ function DashboardPage({page, t}: Props) {
 
     const load = useCallback(async () => {
         try {
-            const next = await loadSystemResourceInfo();
+            const next = mergeResourceInfo(infoRef.current, await loadSystemResourceInfo());
+            infoRef.current = next;
             const sample: Sample = {
                 time: Date.now(),
-                cpu: percent(next.cpuPercent),
-                memory: ratio(next.usedMemoryBytes, next.totalMemoryBytes),
-                gpu: percent(next.gpuPercent),
-                vram: ratio(next.usedVRAMBytes, next.totalVRAMBytes),
+                cpu: resourceStatus(next, 'cpu').state === 'ready' ? percent(next.cpuPercent) : null,
+                memory: resourceStatus(next, 'memory').state === 'ready' ? ratio(next.usedMemoryBytes, next.totalMemoryBytes) : null,
+                gpu: resourceStatus(next, 'gpu').state === 'ready' ? percent(next.gpuPercent) : null,
+                vram: resourceStatus(next, 'vram').state === 'ready' ? ratio(next.usedVRAMBytes, next.totalVRAMBytes) : null,
             };
             setInfo(next);
             setHistory(current => [...current.filter(item => item.time >= sample.time - historyWindow), sample].slice(-maxHistorySamples));
             setError('');
         } catch {
+            const previous = infoRef.current;
+            if (previous) {
+                const metrics = {...previous.metrics};
+                for (const key of Object.keys(metrics) as ResourceMetric[]) {
+                    const status = metrics[key]!;
+                    if (status.state === 'ready') metrics[key] = {...status, state: 'stale', error: t('dashboard.error')};
+                }
+                infoRef.current = {...previous, metrics};
+                setInfo(infoRef.current);
+                setHistory(current => [...current, {time: Date.now(), cpu: null, memory: null, gpu: null, vram: null}].slice(-maxHistorySamples));
+            }
             setError(t('dashboard.error'));
         } finally {
             setLoading(false);
@@ -81,9 +88,8 @@ function DashboardPage({page, t}: Props) {
         {key: 'vram' as const, title: t('dashboard.chart.vram'), aria: t('dashboard.chart.vramAria')},
     ];
     const active = resources.find(resource => resource.key === selected)!;
-    const latest = history[history.length - 1];
     const subtitle = info ? resourceSubtitle(info, selected, t) : t('dashboard.autoRefresh');
-    const metrics = info ? buildMetrics(info, selected, latest?.[selected] ?? 0, t) : [];
+    const metrics = info ? buildMetrics(info, selected, resourceUsage(info, selected), t) : [];
 
     return (
         <section className="page-panel dashboard-page" aria-label={page.title}>
@@ -98,11 +104,11 @@ function DashboardPage({page, t}: Props) {
                                 aria-label={resource.title} aria-pressed={selected === resource.key}
                                 onClick={() => setSelected(resource.key)}>
                                 <svg className="resource-mini-chart" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                                    <polyline points={points.map(point => point.x + ',' + point.y).join(' ')}/>
+                                    {graphSegments(points).map((segment, index) => <polyline key={index} points={segment.map(point => point.x + ',' + point.y).join(' ')}/>)}
                                 </svg>
                                 <span className="resource-select-text">
                                     <span className="resource-select-title">{resource.title}</span>
-                                    <span className="resource-select-value">{formatPercent(latest?.[resource.key] ?? 0)}</span>
+                                    <span className="resource-select-value">{metricValue(info, resource.key, formatPercent(resourceUsage(info, resource.key)), t)}</span>
                                     <span className="resource-select-meta">{resourceSubtitle(info, resource.key, t)}</span>
                                 </span>
                             </button>
@@ -118,11 +124,23 @@ function DashboardPage({page, t}: Props) {
                     <dl className="performance-metrics">
                         {metrics.map(metric => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>)}
                     </dl>
-                    {latest && <p className="resource-updated-at">{t('dashboard.lastUpdated')}: {new Date(latest.time).toLocaleTimeString()}</p>}
+                    {resourceStatus(info, selected).updatedAt > 0 && <p className="resource-updated-at">{t('dashboard.lastUpdated')}: {new Date(resourceStatus(info, selected).updatedAt).toLocaleTimeString()}</p>}
+                    {resourceStatus(info, selected).error && <StatusMessage variant="warning">{resourceStatus(info, selected).error}</StatusMessage>}
                 </div>
             </div>}
         </section>
     );
+}
+
+function resourceUsage(info: SystemResourceInfo, key: ResourceKey): number {
+    return key === 'cpu' ? info.cpuPercent : key === 'gpu' ? info.gpuPercent : key === 'memory' ? ratio(info.usedMemoryBytes, info.totalMemoryBytes) : ratio(info.usedVRAMBytes, info.totalVRAMBytes);
+}
+function metricValue(info: SystemResourceInfo, key: ResourceMetric, value: string, t: Translator): string {
+    const status = resourceStatus(info, key);
+    if (status.state === 'collecting') return t('resource.collecting');
+    if (status.state === 'unavailable') return t('resource.unavailable');
+    const time = status.updatedAt > 0 ? ' · ' + new Date(status.updatedAt).toLocaleTimeString() : '';
+    return status.state === 'stale' ? value + ' · ' + t('resource.stale') + time : value;
 }
 
 function resourceSubtitle(info: SystemResourceInfo | null, key: ResourceKey, t: Translator): string {
@@ -134,58 +152,58 @@ function resourceSubtitle(info: SystemResourceInfo | null, key: ResourceKey, t: 
         return info.cpuName || t('common.unavailable');
     }
     if (key === 'memory') {
-        return formatMemorySize(info.totalMemoryBytes);
+        return metricValue(info, 'memory', formatMemorySize(info.totalMemoryBytes), t);
     }
     if (key === 'gpu') {
         return formatList(info.gpuNames, t);
     }
 
-    return info.totalVRAMBytes > 0 ? formatMemorySize(info.totalVRAMBytes) : t('common.unavailable');
+    return metricValue(info, 'vram', info.totalVRAMBytes > 0 ? formatMemorySize(info.totalVRAMBytes) : t('common.unavailable'), t);
 }
 
 function buildMetrics(info: SystemResourceInfo, key: ResourceKey, usage: number, t: Translator): Metric[] {
     const commonSystemMetrics = [
-        {label: t('dashboard.metric.processes'), value: formatWholeNumber(info.processCount)},
-        {label: t('dashboard.metric.threads'), value: formatWholeNumber(info.threadCount)},
-        {label: t('dashboard.metric.occupiedPorts'), value: formatWholeNumber(info.portCount)},
-        {label: t('dashboard.metric.uptime'), value: formatUptime(info.uptimeSeconds, t)},
+        {label: t('dashboard.metric.processes'), value: metricValue(info, 'processes', formatWholeNumber(info.processCount), t)},
+        {label: t('dashboard.metric.threads'), value: metricValue(info, 'threads', formatWholeNumber(info.threadCount), t)},
+        {label: t('dashboard.metric.occupiedPorts'), value: metricValue(info, 'ports', formatWholeNumber(info.portCount), t)},
+        {label: t('dashboard.metric.uptime'), value: metricValue(info, 'uptime', formatUptime(info.uptimeSeconds, t), t)},
     ];
 
     if (key === 'cpu') {
         return [
-            {label: t('dashboard.metric.usage'), value: formatPercent(usage)},
-            {label: t('dashboard.metric.baseSpeed'), value: formatFrequencyMHz(info.cpuMaxMHz, t)},
-            {label: t('dashboard.metric.physicalCores'), value: formatWholeNumber(info.cpuPhysicalCores)},
-            {label: t('dashboard.metric.logicalProcessors'), value: formatWholeNumber(info.cpuLogicalProcessors)},
+            {label: t('dashboard.metric.usage'), value: metricValue(info, key, formatPercent(usage), t)},
+            {label: t('dashboard.metric.baseSpeed'), value: metricValue(info, 'cpuInfo', formatFrequencyMHz(info.cpuMaxMHz, t), t)},
+            {label: t('dashboard.metric.physicalCores'), value: metricValue(info, 'cpuInfo', info.cpuPhysicalCores > 0 ? formatWholeNumber(info.cpuPhysicalCores) : t('common.unavailable'), t)},
+            {label: t('dashboard.metric.logicalProcessors'), value: metricValue(info, 'cpuInfo', info.cpuLogicalProcessors > 0 ? formatWholeNumber(info.cpuLogicalProcessors) : t('common.unavailable'), t)},
             ...commonSystemMetrics,
         ];
     }
 
     if (key === 'memory') {
         return [
-            {label: t('dashboard.metric.usage'), value: formatPercent(usage)},
-            {label: t('dashboard.metric.usedMemory'), value: formatMemorySize(info.usedMemoryBytes)},
-            {label: t('dashboard.metric.freeMemory'), value: formatMemorySize(info.freeMemoryBytes)},
-            {label: t('dashboard.metric.totalMemory'), value: formatMemorySize(info.totalMemoryBytes)},
+            {label: t('dashboard.metric.usage'), value: metricValue(info, key, formatPercent(usage), t)},
+            {label: t('dashboard.metric.usedMemory'), value: metricValue(info, 'memory', formatMemorySize(info.usedMemoryBytes), t)},
+            {label: t('dashboard.metric.freeMemory'), value: metricValue(info, 'memory', formatMemorySize(info.freeMemoryBytes), t)},
+            {label: t('dashboard.metric.totalMemory'), value: metricValue(info, 'memory', formatMemorySize(info.totalMemoryBytes), t)},
             ...commonSystemMetrics.slice(0, 2),
         ];
     }
 
     if (key === 'gpu') {
         return [
-            {label: t('dashboard.metric.usage'), value: formatPercent(usage)},
-            {label: t('dashboard.metric.gpuModel'), value: formatList(info.gpuNames, t)},
-            {label: t('dashboard.metric.usedVRAM'), value: formatMemorySize(info.usedVRAMBytes)},
-            {label: t('dashboard.metric.totalVRAM'), value: info.totalVRAMBytes > 0 ? formatMemorySize(info.totalVRAMBytes) : t('common.unavailable')},
+            {label: t('dashboard.metric.usage'), value: metricValue(info, key, formatPercent(usage), t)},
+            {label: t('dashboard.metric.gpuModel'), value: metricValue(info, 'gpu', formatList(info.gpuNames, t), t)},
+            {label: t('dashboard.metric.usedVRAM'), value: metricValue(info, 'vram', formatMemorySize(info.usedVRAMBytes), t)},
+            {label: t('dashboard.metric.totalVRAM'), value: metricValue(info, 'vram', info.totalVRAMBytes > 0 ? formatMemorySize(info.totalVRAMBytes) : t('common.unavailable'), t)},
         ];
     }
 
     return [
-        {label: t('dashboard.metric.usage'), value: formatPercent(usage)},
-        {label: t('dashboard.metric.usedVRAM'), value: formatMemorySize(info.usedVRAMBytes)},
-        {label: t('dashboard.metric.freeVRAM'), value: formatMemorySize(info.freeVRAMBytes)},
-        {label: t('dashboard.metric.totalVRAM'), value: info.totalVRAMBytes > 0 ? formatMemorySize(info.totalVRAMBytes) : t('common.unavailable')},
-        {label: t('dashboard.metric.gpuModel'), value: formatList(info.gpuNames, t)},
+        {label: t('dashboard.metric.usage'), value: metricValue(info, key, formatPercent(usage), t)},
+        {label: t('dashboard.metric.usedVRAM'), value: metricValue(info, 'vram', formatMemorySize(info.usedVRAMBytes), t)},
+        {label: t('dashboard.metric.freeVRAM'), value: metricValue(info, 'vram', formatMemorySize(info.freeVRAMBytes), t)},
+        {label: t('dashboard.metric.totalVRAM'), value: metricValue(info, 'vram', info.totalVRAMBytes > 0 ? formatMemorySize(info.totalVRAMBytes) : t('common.unavailable'), t)},
+        {label: t('dashboard.metric.gpuModel'), value: metricValue(info, 'gpu', formatList(info.gpuNames, t), t)},
     ];
 }
 
@@ -242,13 +260,14 @@ function ResourceGraph({history, resourceKey, title, ariaLabel, t}: {
     const points = graphPoints(history, resourceKey);
     const active = activeIndex === null ? null : points[Math.min(activeIndex, points.length - 1)];
     const pointsString = points.map(point => point.x + ',' + point.y).join(' ');
-    const area = points.length > 1
+    const area = points.length > 1 && !points.some(point => point.gap)
         ? 'M' + points[0].x + ',100 L' + pointsString.replaceAll(' ', ' L') + ' L100,100 Z'
         : '';
 
     const handleMove = (event: MouseEvent<SVGSVGElement>) => {
         const bounds = event.currentTarget.getBoundingClientRect();
         const x = (event.clientX - bounds.left) / (bounds.width || 100) * 100;
+        if (!points.length) return;
         const nearest = points.reduce((best, point, index) => Math.abs(point.x - x) < Math.abs(points[best].x - x) ? index : best, 0);
         setActiveIndex(nearest);
     };
@@ -271,7 +290,7 @@ function ResourceGraph({history, resourceKey, title, ariaLabel, t}: {
                         {[10, 20, 30, 40, 50, 60, 70, 80, 90].map(value => <line key={'v' + value} y1="0" y2="100" x1={value} x2={value}/>)}
                     </g>
                     {area && <path className="performance-area" d={area}/>}
-                    <polyline className="performance-line" points={pointsString}/>
+                    {graphSegments(points).map((segment, index) => <polyline key={index} className="performance-line" points={segment.map(point => point.x + ',' + point.y).join(' ')}/>)}
                     {points.length === 1 && <line className="performance-line" x1="99.6" x2="100" y1={points[0].y} y2={points[0].y}/>}
                     {active && <line className="performance-crosshair" x1={active.x} x2={active.x} y1="0" y2="100"/>}
                 </svg>

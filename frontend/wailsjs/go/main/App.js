@@ -54,12 +54,12 @@ export function GetSystemResourceInfo() {
   return window['go']['main']['App']['GetSystemResourceInfo']();
 }
 
-export function KillProcessByPID(arg1) {
-  return window['go']['main']['App']['KillProcessByPID'](arg1);
+export function KillProcessByPID(arg1, arg2) {
+  return window['go']['main']['App']['KillProcessByPID'](arg1, arg2);
 }
 
-export function KillProcessByPort(arg1, arg2) {
-  return window['go']['main']['App']['KillProcessByPort'](arg1, arg2);
+export function KillProcessByPort(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['KillProcessByPort'](arg1, arg2, arg3, arg4);
 }
 
 export function SetCleanupRuleEnabled(arg1, arg2) {
