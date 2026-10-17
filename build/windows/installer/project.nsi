@@ -71,8 +71,8 @@ ManifestDPIAware true
 #!uninstfinalize 'signtool sign /fd sha256 /td sha256 /tr http://timestamp.digicert.com /f "%WINDOWS_SIGNING_CERT_PATH%" /p "%WINDOWS_SIGNING_CERT_PASSWORD%" "%1"'
 #!finalize 'signtool sign /fd sha256 /td sha256 /tr http://timestamp.digicert.com /f "%WINDOWS_SIGNING_CERT_PATH%" /p "%WINDOWS_SIGNING_CERT_PASSWORD%" "%1"'
 
-Name "${INFO_PRODUCTNAME}"
-OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.
+Name "${INFO_PRODUCTNAME} v${INFO_PRODUCTVERSION}"
+OutFile "..\..\bin\${INFO_PRODUCTNAME}-v${INFO_PRODUCTVERSION}-windows-${ARCH}-installer.exe" # Name of the installer's file.
 InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Default installing folder ($PROGRAMFILES is Program Files folder).
 ShowInstDetails show # This will always show the installation details.
 

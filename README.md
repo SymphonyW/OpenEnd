@@ -13,12 +13,12 @@
 </p>
 
 <p align="center">
-  English | <a href="README.zh-CN.md">中文</a>
+  English | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 # OpenEnd
 
-[Download Windows installer](https://github.com/SymphonyW/OpenEnd/releases/latest/download/openend-amd64-installer.exe)
+[Download Windows installer](https://github.com/SymphonyW/OpenEnd/releases/latest)
 
 [Blog post](https://symphonyw.github.io/p/openend/)
 

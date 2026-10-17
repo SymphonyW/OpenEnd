@@ -73,6 +73,8 @@ wails build -platform windows/amd64 -webview2 download -clean -nsis
 
 `wails.json` 中的 `info` 会写入 Windows 文件属性和安装包元数据；当前版本号为 `2.1.3`。
 
+安装包文件名包含产品名、版本号和架构，例如 `OpenEnd-v2.1.3-windows-amd64-installer.exe`；安装向导标题也会显示 `OpenEnd v2.1.3`。版本号自动读取 `info.productVersion`。
+
 ## 验证安装包
 
 建议在干净的 Windows 测试机或虚拟机上验证:
