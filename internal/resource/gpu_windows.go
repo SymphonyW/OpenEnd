@@ -15,34 +15,27 @@ var defaultTotalVRAMReader = newCachedTotalVRAMReader(readTotalVRAMBytes)
 
 // GetGPUInfo returns a Windows GPU usage snapshot from WMI performance counters.
 func GetGPUInfo() GPUInfo {
+	errors := map[string]string{}
 	engineCounters, err := queryGPUEngineCounters()
-	if err != nil {
-		// TODO: surface GPU engine counter collection errors to the frontend diagnostics panel.
-		engineCounters = nil
+	if err != nil || len(engineCounters) == 0 {
+		errors["gpu"] = fmt.Sprintf("GPU counters unavailable: %v", err)
 	}
-
 	memoryCounters, err := queryGPUMemoryCounters()
-	if err != nil {
-		// TODO: surface GPU memory counter collection errors to the frontend diagnostics panel.
-		memoryCounters = nil
+	if err != nil || len(memoryCounters) == 0 {
+		errors["vram"] = fmt.Sprintf("VRAM counters unavailable: %v", err)
 	}
-
 	controllers, err := queryGPUControllers()
-	if err != nil {
-		controllers = nil
-	}
 	names := make([]string, 0, len(controllers))
 	for _, controller := range controllers {
 		names = append(names, controller.Name)
 	}
-
 	totalVRAMBytes, err := defaultTotalVRAMReader.Read()
-	if err != nil {
-		// TODO: expose a precise driver-level VRAM total when neither registry nor WMI can provide it.
-		totalVRAMBytes = 0
+	if err != nil || totalVRAMBytes == 0 {
+		errors["vram"] = fmt.Sprintf("VRAM total unavailable: %v", err)
 	}
-
-	return buildGPUInfo(engineCounters, memoryCounters, names, totalVRAMBytes)
+	info := buildGPUInfo(engineCounters, memoryCounters, names, totalVRAMBytes)
+	info.Errors = errors
+	return info
 }
 
 func queryGPUEngineCounters() ([]gpuEngineCounter, error) {

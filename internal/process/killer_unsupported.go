@@ -25,3 +25,7 @@ func KillByPIDWithProtector(ctx context.Context, pid int, protector Protector) O
 		PID:     pid,
 	}
 }
+
+func KillConfirmedByPIDWithProtector(ctx context.Context, pid int, createdAt int64, protector Protector) OperationResult {
+	return KillByPIDWithProtector(ctx, pid, protector)
+}

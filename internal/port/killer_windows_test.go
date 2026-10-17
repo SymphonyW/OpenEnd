@@ -59,6 +59,20 @@ func TestKillProcessByPortResolvesPIDBeforeKilling(t *testing.T) {
 	}
 }
 
+func TestConfirmedPortKillRefusesChangedMissingOrMultipleOwners(t *testing.T) {
+	for _, pids := range [][]int32{{200}, {}, {100, 200}} {
+		var connections []gopsnet.ConnectionStat
+		for _, pid := range pids {
+			connections = append(connections, gopsnet.ConnectionStat{Laddr: gopsnet.Addr{Port: 3000}, Pid: pid})
+		}
+		ops := &fakePortKillOperations{connections: map[string][]gopsnet.ConnectionStat{"tcp": connections}}
+		result := killProcessByPort(context.Background(), 3000, "TCP", ops, 100)
+		if result.Success || result.Code != "identity_changed" || ops.killedPID != 0 {
+			t.Fatalf("owners %v: %+v killed=%d", pids, result, ops.killedPID)
+		}
+	}
+}
+
 func TestKillProcessByPortDoesNotKillMissingPort(t *testing.T) {
 	ops := &fakePortKillOperations{
 		connections: map[string][]gopsnet.ConnectionStat{

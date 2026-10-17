@@ -1,6 +1,7 @@
 import {useCallback, useState} from 'react';
 import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
+import RefreshControls from '../components/RefreshControls';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {loadOperationLogs} from '../services/logs';
 import type {Translator} from '../services/i18n';
@@ -17,6 +18,7 @@ interface LogsPageProps {
 function LogsPage({page, t}: LogsPageProps) {
     const [logs, setLogs] = useState<OperationLog[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState<number>();
     const [errorMessage, setErrorMessage] = useState('');
 
     const loadLogs = useCallback(async (showLoading = true) => {
@@ -28,8 +30,8 @@ function LogsPage({page, t}: LogsPageProps) {
         try {
             const nextLogs = await loadOperationLogs();
             setLogs(nextLogs);
+            setLastUpdated(Date.now());
         } catch {
-            setLogs([]);
             setErrorMessage(t('logs.error'));
         } finally {
             if (showLoading) {
@@ -38,10 +40,11 @@ function LogsPage({page, t}: LogsPageProps) {
         }
     }, [t]);
 
-    useSequentialAutoRefresh(loadLogs, logRefreshIntervalMs);
+    const refresh = useSequentialAutoRefresh(loadLogs, logRefreshIntervalMs);
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
+            <RefreshControls t={t} {...refresh} updatedAt={lastUpdated}/>
             {errorMessage && <StatusMessage variant="error">{errorMessage}</StatusMessage>}
             {isLoading && logs.length === 0 && (
                 <StatusMessage variant="loading">{t('logs.loading')}</StatusMessage>

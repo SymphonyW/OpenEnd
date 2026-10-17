@@ -2,6 +2,7 @@ package process
 
 // Info is the process row returned to the Wails frontend.
 type Info struct {
+	CreatedAt   int64   `json:"createdAt"`
 	PID         int32   `json:"pid"`
 	Name        string  `json:"name"`
 	IconDataURL string  `json:"iconDataURL"`

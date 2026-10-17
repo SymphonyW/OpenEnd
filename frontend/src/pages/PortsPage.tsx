@@ -3,6 +3,8 @@ import type {KeyboardEvent, MouseEvent} from 'react';
 import ProcessNameCell from '../components/ProcessNameCell';
 import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
+import RefreshControls from '../components/RefreshControls';
+import {operationText, operationVariant, type OperationVariant} from '../services/operations';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {loadRecentOperationLogsForResource} from '../services/logs';
 import {isCommonDevelopmentPort, killProcessByPort, loadPortList} from '../services/ports';
@@ -36,7 +38,10 @@ function PortsPage({page, t}: PortsPageProps) {
     const [statusFilter, setStatusFilter] = useState('all');
     const [isLoading, setIsLoading] = useState(false);
     const [isKilling, setIsKilling] = useState(false);
+    const [relatedUpdated, setRelatedUpdated] = useState<number>();
+    const [lastUpdated, setLastUpdated] = useState<number>();
     const [errorMessage, setErrorMessage] = useState('');
+    const [operationStatus, setOperationStatus] = useState<OperationVariant>('success');
     const [operationMessage, setOperationMessage] = useState('');
     const [portToKill, setPortToKill] = useState<PortInfo | null>(null);
     const [selectedPort, setSelectedPort] = useState<PortInfo | null>(null);
@@ -51,24 +56,22 @@ function PortsPage({page, t}: PortsPageProps) {
         setErrorMessage('');
 
         try {
-            const [nextPorts, nextProcesses] = await Promise.all([
-                loadPortList(),
-                loadProcessList().catch((): ProcessInfo[] => []),
-            ]);
-            setPorts(nextPorts);
-            setProcesses(nextProcesses);
+            const [primary, related] = await Promise.allSettled([loadPortList(), loadProcessList()]);
+            if (primary.status === 'rejected') throw primary.reason;
+            setPorts(primary.value);
+            if (related.status === 'fulfilled') { setProcesses(related.value); setRelatedUpdated(Date.now()); }
+            else setErrorMessage(t('refresh.relatedError') + (relatedUpdated ? ' ' + t('dashboard.lastUpdated') + ': ' + new Date(relatedUpdated).toLocaleTimeString() : ' ' + t('common.unavailable')));
+            setLastUpdated(Date.now());
         } catch {
-            setPorts([]);
-            setProcesses([]);
             setErrorMessage(t('ports.error'));
         } finally {
             if (showLoading) {
                 setIsLoading(false);
             }
         }
-    }, [t]);
+    }, [t, relatedUpdated]);
 
-    useSequentialAutoRefresh(loadPorts, portRefreshIntervalMs);
+    const refresh = useSequentialAutoRefresh(loadPorts, portRefreshIntervalMs);
 
     const loadRelatedLogs = useCallback(async (port: PortInfo) => {
         setLogsErrorMessage('');
@@ -123,10 +126,12 @@ function PortsPage({page, t}: PortsPageProps) {
         setErrorMessage('');
 
         try {
-            const result = await killProcessByPort(portToKill.port, portToKill.protocol);
-            setOperationMessage(result.message);
+            const result = await killProcessByPort(portToKill.port, portToKill.protocol, portToKill.pid, portToKill.createdAt);
+            setOperationStatus(operationVariant(result));
+            setOperationMessage(operationText(result, t));
             setPortToKill(null);
 
+            if (result.code === 'identity_changed') { closePortDetail(); await loadPorts(false); }
             if (result.success) {
                 await loadPorts(false);
                 if (selectedPort && samePort(selectedPort, portToKill)) {
@@ -136,6 +141,7 @@ function PortsPage({page, t}: PortsPageProps) {
                 }
             }
         } catch {
+            setOperationStatus('error');
             setOperationMessage(t('processes.killError'));
         } finally {
             setIsKilling(false);
@@ -224,7 +230,8 @@ function PortsPage({page, t}: PortsPageProps) {
         || statusFilter !== 'all';
     const emptyMessage = isFiltered ? t('ports.emptyFiltered') : t('ports.empty');
     const processesByPID = useMemo(() => groupProcessesByPID(processes), [processes]);
-    const selectedOwner = selectedPort ? processesByPID.get(selectedPort.pid) : undefined;
+    const selectedProcess = selectedPort ? processesByPID.get(selectedPort.pid) : undefined;
+    const selectedOwner = selectedProcess?.createdAt === selectedPort?.createdAt ? selectedProcess : undefined;
     const relatedLogs = useMemo(() => {
         if (!selectedPort) {
             return [];
@@ -235,6 +242,7 @@ function PortsPage({page, t}: PortsPageProps) {
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
+            <RefreshControls t={t} {...refresh} updatedAt={lastUpdated}/>
             <div className="resource-toolbar port-toolbar">
                 <label className="filter-field compact-filter">
                     <span>{t('filter.port')}</span>
@@ -286,7 +294,7 @@ function PortsPage({page, t}: PortsPageProps) {
             </div>
 
             {errorMessage && <StatusMessage variant="error">{errorMessage}</StatusMessage>}
-            {operationMessage && <StatusMessage variant="success">{operationMessage}</StatusMessage>}
+            {operationMessage && <StatusMessage variant={operationStatus}>{operationMessage}</StatusMessage>}
             {isLoading && ports.length === 0 && (
                 <StatusMessage variant="loading">{t('ports.loading')}</StatusMessage>
             )}
@@ -321,7 +329,8 @@ function PortsPage({page, t}: PortsPageProps) {
                                     const isDevPort = isCommonDevelopmentPort(port.port);
                                     const isSelected = (selectedPort ? samePort(selectedPort, port) : false)
                                         || (contextMenu ? samePort(contextMenu.port, port) : false);
-                                    const owner = processesByPID.get(port.pid);
+                                    const candidateOwner = processesByPID.get(port.pid);
+                                    const owner = candidateOwner?.createdAt === port.createdAt ? candidateOwner : undefined;
                                     const processName = owner?.name || port.processName || t('common.unknown');
                                     const processPath = owner?.path || port.processPath || t('common.unavailable');
                                     const commandLine = owner?.commandLine || t('common.unavailable');
@@ -512,6 +521,7 @@ function PortsPage({page, t}: PortsPageProps) {
                             </button>
                         </div>
                         <dl className="confirmation-details">
+                            <div><dt>{t('field.processCreatedAt')}</dt><dd>{portToKill.createdAt > 0 ? new Date(portToKill.createdAt).toLocaleString() : t('common.unavailable')}</dd></div>
                             <div>
                                 <dt>{t('field.port')}</dt>
                                 <dd className="mono">{portToKill.port}</dd>
@@ -619,7 +629,7 @@ function portRowClassName(port: PortInfo, isSelected: boolean): string | undefin
 }
 
 function portRowKey(port: PortInfo): string {
-    return `${port.protocol}-${port.port}-${port.pid}-${port.status}`;
+    return `${port.protocol}-${port.port}-${port.pid}-${port.createdAt}-${port.status}`;
 }
 
 function samePort(left: PortInfo, right: PortInfo): boolean {

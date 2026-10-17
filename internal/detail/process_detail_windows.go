@@ -31,6 +31,7 @@ func ReadProcessSnapshot(ctx context.Context, pid int32, protector processscanne
 	}
 
 	snapshot := ProcessSnapshot{PID: pid}
+	snapshot.CreatedAt, _ = process.CreateTimeWithContext(ctx)
 	if name, err := process.NameWithContext(ctx); err == nil {
 		snapshot.ProcessName = strings.TrimSpace(name)
 	}

@@ -1,4 +1,8 @@
+export type ResourceState = 'collecting' | 'unavailable' | 'ready' | 'stale';
+export interface ResourceStatus { state: ResourceState; updatedAt: number; error: string; }
+export type ResourceMetric = 'cpu' | 'cpuInfo' | 'memory' | 'gpu' | 'vram' | 'processes' | 'threads' | 'ports' | 'uptime';
 export interface SystemResourceInfo {
+    metrics?: Partial<Record<ResourceMetric, ResourceStatus>>;
     cpuPercent: number;
     cpuName: string;
     cpuPhysicalCores: number;

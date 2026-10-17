@@ -9,6 +9,6 @@ export function loadProcessDetail(pid: number): Promise<ProcessDetail> {
     return GetProcessDetail(pid);
 }
 
-export function killProcessByPID(pid: number): Promise<OperationResult> {
-    return KillProcessByPID(pid);
+export function killProcessByPID(pid: number, createdAt: number): Promise<OperationResult> {
+    return KillProcessByPID(pid, createdAt);
 }

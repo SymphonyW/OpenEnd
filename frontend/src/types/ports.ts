@@ -3,6 +3,7 @@ export interface PortInfo {
     protocol: string;
     status: string;
     pid: number;
+    createdAt: number;
     processName: string;
     processPath: string;
     isProtected: boolean;

@@ -8,8 +8,8 @@ export function loadPortList(): Promise<PortInfo[]> {
     return GetPortList();
 }
 
-export function killProcessByPort(port: number, protocol: string): Promise<OperationResult> {
-    return KillProcessByPort(port, protocol);
+export function killProcessByPort(port: number, protocol: string, pid: number, createdAt: number): Promise<OperationResult> {
+    return KillProcessByPort(port, protocol, pid, createdAt);
 }
 
 export function isCommonDevelopmentPort(port: number): boolean {

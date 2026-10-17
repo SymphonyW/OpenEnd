@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useState} from 'react';
 import './App.css';
 import Sidebar from './components/Sidebar';
+import {PageActivityContext} from './hooks/useSequentialAutoRefresh';
 import PagePanel from './pages/PagePanel';
 import {
     createTranslator,
@@ -13,6 +14,11 @@ import type {PageId} from './types/navigation';
 
 function App() {
     const [activePageId, setActivePageId] = useState<PageId>(defaultPageId);
+    const [visitedPages, setVisitedPages] = useState<PageId[]>([defaultPageId]);
+    const selectPage = (id: PageId) => {
+        setVisitedPages(current => current.includes(id) ? current : [...current, id]);
+        setActivePageId(id);
+    };
     const [language, setLanguage] = useState<LanguageCode>(() => resolveInitialLanguage());
 
     const t = useMemo(() => createTranslator(language), [language]);
@@ -35,20 +41,19 @@ function App() {
                 activePageId={activePageId}
                 pages={pages}
                 t={t}
-                onSelectPage={setActivePageId}
+                onSelectPage={selectPage}
             />
             <main className="main-content">
                 <header className="workspace-header">
                     <h1>{activePage.label}</h1>
                 </header>
-                <div className="workspace-body" key={activePageId}>
-                    <PagePanel
-                        language={language}
-                        page={activePage}
-                        t={t}
-                        onLanguageChange={handleLanguageChange}
-                    />
-                </div>
+                {visitedPages.map(id => (
+                    <div className="workspace-body" key={id} hidden={id !== activePageId}>
+                        <PageActivityContext.Provider value={id === activePageId}>
+                            <PagePanel language={language} page={getPageById(id, pages)} t={t} onLanguageChange={handleLanguageChange}/>
+                        </PageActivityContext.Provider>
+                    </div>
+                ))}
             </main>
         </div>
     );

@@ -6,6 +6,7 @@ import type {ProcessInfo} from '../types/processes';
 
 const baseProcess: ProcessInfo = {
     pid: 0,
+    createdAt: 1000,
     name: '',
     iconDataURL: '',
     path: '',
@@ -57,6 +58,7 @@ describe('buildCleanupCandidates', () => {
             {
                 ...baseProcess,
                 pid: 100,
+                createdAt: 1000,
                 name: 'node.exe',
                 commandLine: 'node ./node_modules/vite/bin/vite.js',
                 memoryBytes: 200,
@@ -64,6 +66,7 @@ describe('buildCleanupCandidates', () => {
             {
                 ...baseProcess,
                 pid: 200,
+                createdAt: 1000,
                 name: 'worker.exe',
                 commandLine: 'worker --local-api',
                 memoryBytes: 300,
@@ -71,6 +74,7 @@ describe('buildCleanupCandidates', () => {
             {
                 ...baseProcess,
                 pid: 300,
+                createdAt: 1000,
                 name: 'svchost.exe',
                 memoryBytes: 400,
                 isProtected: true,
@@ -78,6 +82,7 @@ describe('buildCleanupCandidates', () => {
             {
                 ...baseProcess,
                 pid: 400,
+                createdAt: 1000,
                 name: 'chrome.exe',
                 memoryBytes: 500,
             },
@@ -88,6 +93,7 @@ describe('buildCleanupCandidates', () => {
                 protocol: 'TCP',
                 status: 'LISTEN',
                 pid: 100,
+                createdAt: 1000,
                 processName: 'node.exe',
                 processPath: '',
                 isProtected: false,
@@ -97,6 +103,7 @@ describe('buildCleanupCandidates', () => {
                 protocol: 'TCP',
                 status: 'LISTEN',
                 pid: 200,
+                createdAt: 1000,
                 processName: 'worker.exe',
                 processPath: '',
                 isProtected: false,
@@ -106,6 +113,7 @@ describe('buildCleanupCandidates', () => {
                 protocol: 'TCP',
                 status: 'LISTEN',
                 pid: 300,
+                createdAt: 1000,
                 processName: 'svchost.exe',
                 processPath: '',
                 isProtected: true,

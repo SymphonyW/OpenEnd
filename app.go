@@ -12,7 +12,6 @@ import (
 	processdetail "openend/internal/detail"
 	portscanner "openend/internal/port"
 	processscanner "openend/internal/process"
-	"openend/internal/resource"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
@@ -23,23 +22,24 @@ import (
 
 // SystemResourceInfo is the resource snapshot returned to the frontend.
 type SystemResourceInfo struct {
-	CPUPercent           float64  `json:"cpuPercent"`
-	CPUName              string   `json:"cpuName"`
-	CPUPhysicalCores     int      `json:"cpuPhysicalCores"`
-	CPULogicalProcessors int      `json:"cpuLogicalProcessors"`
-	CPUMaxMHz            float64  `json:"cpuMaxMHz"`
-	TotalMemoryBytes     uint64   `json:"totalMemoryBytes"`
-	UsedMemoryBytes      uint64   `json:"usedMemoryBytes"`
-	FreeMemoryBytes      uint64   `json:"freeMemoryBytes"`
-	GPUPercent           float64  `json:"gpuPercent"`
-	GPUNames             []string `json:"gpuNames"`
-	TotalVRAMBytes       uint64   `json:"totalVRAMBytes"`
-	UsedVRAMBytes        uint64   `json:"usedVRAMBytes"`
-	FreeVRAMBytes        uint64   `json:"freeVRAMBytes"`
-	ProcessCount         int      `json:"processCount"`
-	ThreadCount          int      `json:"threadCount"`
-	PortCount            int      `json:"portCount"`
-	UptimeSeconds        uint64   `json:"uptimeSeconds"`
+	Metrics              map[string]ResourceStatus `json:"metrics"`
+	CPUPercent           float64                   `json:"cpuPercent"`
+	CPUName              string                    `json:"cpuName"`
+	CPUPhysicalCores     int                       `json:"cpuPhysicalCores"`
+	CPULogicalProcessors int                       `json:"cpuLogicalProcessors"`
+	CPUMaxMHz            float64                   `json:"cpuMaxMHz"`
+	TotalMemoryBytes     uint64                    `json:"totalMemoryBytes"`
+	UsedMemoryBytes      uint64                    `json:"usedMemoryBytes"`
+	FreeMemoryBytes      uint64                    `json:"freeMemoryBytes"`
+	GPUPercent           float64                   `json:"gpuPercent"`
+	GPUNames             []string                  `json:"gpuNames"`
+	TotalVRAMBytes       uint64                    `json:"totalVRAMBytes"`
+	UsedVRAMBytes        uint64                    `json:"usedVRAMBytes"`
+	FreeVRAMBytes        uint64                    `json:"freeVRAMBytes"`
+	ProcessCount         int                       `json:"processCount"`
+	ThreadCount          int                       `json:"threadCount"`
+	PortCount            int                       `json:"portCount"`
+	UptimeSeconds        uint64                    `json:"uptimeSeconds"`
 }
 
 // App struct
@@ -86,52 +86,44 @@ type cpuResourceInfo struct {
 }
 
 type systemResourceCollectors struct {
-	CPUPercent   func() float64
-	CPUInfo      func() cpuResourceInfo
-	Memory       func() memoryResourceInfo
-	GPU          func() resource.GPUInfo
-	ProcessCount func() int
-	ThreadCount  func() int
-	PortCount    func() int
-	Uptime       func() uint64
+	CPUPercent   func() (float64, ResourceStatus)
+	CPUInfo      func() (cpuResourceInfo, ResourceStatus)
+	Memory       func() (memoryResourceInfo, ResourceStatus)
+	GPU          func() (gpuResourceReading, ResourceStatus)
+	ProcessCount func() (int, ResourceStatus)
+	ThreadCount  func() (int, ResourceStatus)
+	PortCount    func() (int, ResourceStatus)
+	Uptime       func() (uint64, ResourceStatus)
 }
 
 func defaultSystemResourceCollectors() systemResourceCollectors {
-	return systemResourceCollectors{
-		CPUPercent:   collectCPUPercent,
-		CPUInfo:      defaultAsyncSystemResourceCollectors.CPUInfo,
-		Memory:       collectMemoryResourceInfo,
-		GPU:          defaultAsyncSystemResourceCollectors.GPU,
-		ProcessCount: collectProcessCount,
-		ThreadCount:  defaultAsyncSystemResourceCollectors.ThreadCount,
-		PortCount:    defaultAsyncSystemResourceCollectors.PortCount,
-		Uptime:       collectUptimeSeconds,
-	}
+	return defaultAsyncSystemResourceCollectors
 }
 
 func collectSystemResourceInfo(collectors systemResourceCollectors) SystemResourceInfo {
 	var cpuPercent float64
 	var cpuInfo cpuResourceInfo
 	var memoryInfo memoryResourceInfo
-	var gpuInfo resource.GPUInfo
+	var gpuReading gpuResourceReading
 	var processCount int
 	var threadCount int
 	var portCount int
 	var uptimeSeconds uint64
+	var cpuStatus, cpuInfoStatus, memoryStatus, gpuStatus, processStatus, threadStatus, portStatus, uptimeStatus ResourceStatus
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(8)
 
 	go func() {
 		defer waitGroup.Done()
 		if collectors.CPUPercent != nil {
-			cpuPercent = collectors.CPUPercent()
+			cpuPercent, cpuStatus = collectors.CPUPercent()
 		}
 	}()
 
 	go func() {
 		defer waitGroup.Done()
 		if collectors.CPUInfo != nil {
-			cpuInfo = collectors.CPUInfo()
+			cpuInfo, cpuInfoStatus = collectors.CPUInfo()
 		}
 	}()
 
@@ -140,7 +132,7 @@ func collectSystemResourceInfo(collectors systemResourceCollectors) SystemResour
 		if collectors.Memory == nil {
 			return
 		}
-		memoryInfo = collectors.Memory()
+		memoryInfo, memoryStatus = collectors.Memory()
 	}()
 
 	go func() {
@@ -148,39 +140,52 @@ func collectSystemResourceInfo(collectors systemResourceCollectors) SystemResour
 		if collectors.GPU == nil {
 			return
 		}
-		gpuInfo = collectors.GPU()
+		gpuReading, gpuStatus = collectors.GPU()
 	}()
 
 	go func() {
 		defer waitGroup.Done()
 		if collectors.ProcessCount != nil {
-			processCount = collectors.ProcessCount()
+			processCount, processStatus = collectors.ProcessCount()
 		}
 	}()
 
 	go func() {
 		defer waitGroup.Done()
 		if collectors.ThreadCount != nil {
-			threadCount = collectors.ThreadCount()
+			threadCount, threadStatus = collectors.ThreadCount()
 		}
 	}()
 
 	go func() {
 		defer waitGroup.Done()
 		if collectors.PortCount != nil {
-			portCount = collectors.PortCount()
+			portCount, portStatus = collectors.PortCount()
 		}
 	}()
 
 	go func() {
 		defer waitGroup.Done()
 		if collectors.Uptime != nil {
-			uptimeSeconds = collectors.Uptime()
+			uptimeSeconds, uptimeStatus = collectors.Uptime()
 		}
 	}()
 
 	waitGroup.Wait()
+	statuses := map[string]ResourceStatus{"cpu": cpuStatus, "cpuInfo": cpuInfoStatus, "memory": memoryStatus, "gpu": gpuStatus, "vram": gpuStatus, "processes": processStatus, "threads": threadStatus, "ports": portStatus, "uptime": uptimeStatus}
+	if gpuStatus.State == "ready" {
+		statuses["gpu"] = gpuReading.GPU
+		statuses["vram"] = gpuReading.VRAM
+	}
+	for key, status := range statuses {
+		if status.State == "" {
+			statuses[key] = ResourceStatus{State: "unavailable"}
+		}
+	}
+	gpuInfo := gpuReading.Info
+
 	return SystemResourceInfo{
+		Metrics:              statuses,
 		CPUPercent:           cpuPercent,
 		CPUName:              cpuInfo.Name,
 		CPUPhysicalCores:     cpuInfo.PhysicalCores,
@@ -201,14 +206,13 @@ func collectSystemResourceInfo(collectors systemResourceCollectors) SystemResour
 	}
 }
 
-func collectCPUPercent() float64 {
+func collectCPUPercent() (float64, error) {
 	percentages, err := cpu.Percent(0, false)
 	if err != nil || len(percentages) == 0 {
-		// TODO: surface CPU collection errors to the frontend diagnostics panel.
-		return 0
+		return 0, fmt.Errorf("CPU collection unavailable: %v", err)
 	}
 
-	return roundOneDecimal(percentages[0])
+	return roundOneDecimal(percentages[0]), nil
 }
 
 func nonNilStrings(values []string) []string {
@@ -261,52 +265,56 @@ func collectCPUResourceInfo() cpuResourceInfo {
 	return info
 }
 
-func collectMemoryResourceInfo() memoryResourceInfo {
+func collectMemoryResourceInfo() (memoryResourceInfo, error) {
 	memory, err := mem.VirtualMemory()
 	if err != nil {
-		// TODO: surface memory collection errors to the frontend diagnostics panel.
-		return memoryResourceInfo{}
+		return memoryResourceInfo{}, err
 	}
 
 	return memoryResourceInfo{
 		TotalBytes: memory.Total,
 		UsedBytes:  memory.Used,
 		FreeBytes:  memory.Available,
-	}
+	}, nil
 }
 
-func collectProcessCount() int {
+func collectProcessCount() (int, error) {
 	pids, err := gopsprocess.Pids()
 	if err != nil {
-		// TODO: surface process collection permission errors to the frontend diagnostics panel.
-		return 0
+		return 0, err
 	}
 
-	return len(pids)
+	return len(pids), nil
 }
 
-func collectThreadCount() int {
+func collectThreadCount() (int, error) {
 	processes, err := gopsprocess.Processes()
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
 	var threadCount int32
+	readable := 0
 	for _, process := range processes {
 		count, err := process.NumThreads()
-		if err == nil && count > 0 {
-			threadCount += count
+		if err == nil {
+			readable++
+			if count > 0 {
+				threadCount += count
+			}
 		}
 	}
 
-	return int(threadCount)
+	if readable < len(processes) {
+		return 0, fmt.Errorf("thread counts readable for only %d/%d processes; try running as administrator", readable, len(processes))
+	}
+	return int(threadCount), nil
 }
 
-func collectPortCount() int {
+func collectPortCount() (int, error) {
 	connections, err := net.Connections("inet")
 	if err != nil {
-		// TODO: surface port collection permission errors to the frontend diagnostics panel.
-		return 0
+		return 0, err
 	}
 
 	ports := make(map[uint32]struct{})
@@ -316,16 +324,16 @@ func collectPortCount() int {
 		}
 	}
 
-	return len(ports)
+	return len(ports), nil
 }
 
-func collectUptimeSeconds() uint64 {
+func collectUptimeSeconds() (uint64, error) {
 	uptime, err := host.Uptime()
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
-	return uptime
+	return uptime, nil
 }
 
 // GetProcessList returns the current Windows process list for the frontend.
@@ -404,7 +412,7 @@ func (a *App) processDetailLogs(ctx context.Context, pid int, processName string
 }
 
 // KillProcessByPID ends a non-protected process by PID and returns an operation result.
-func (a *App) KillProcessByPID(pid int) processscanner.OperationResult {
+func (a *App) KillProcessByPID(pid int, createdAt int64) processscanner.OperationResult {
 	ctx := a.appContext()
 	rules, err := a.loadProtectionRules(ctx)
 	if err != nil {
@@ -416,12 +424,12 @@ func (a *App) KillProcessByPID(pid int) processscanner.OperationResult {
 		return a.recordOperationLog(ctx, "kill_process_by_pid", 0, result)
 	}
 
-	result := processscanner.KillByPIDWithProtector(ctx, pid, rules)
+	result := processscanner.KillConfirmedByPIDWithProtector(ctx, pid, createdAt, rules)
 	return a.recordOperationLog(ctx, "kill_process_by_pid", 0, result)
 }
 
 // KillProcessByPort resolves a port owner and ends the owning process if it is allowed.
-func (a *App) KillProcessByPort(port int, protocol string) processscanner.OperationResult {
+func (a *App) KillProcessByPort(port int, protocol string, expectedPID int, createdAt int64) processscanner.OperationResult {
 	ctx := a.appContext()
 	rules, err := a.loadProtectionRules(ctx)
 	if err != nil {
@@ -432,7 +440,7 @@ func (a *App) KillProcessByPort(port int, protocol string) processscanner.Operat
 		return a.recordOperationLog(ctx, "kill_process_by_port", port, result)
 	}
 
-	result := portscanner.KillProcessByPortWithProtector(ctx, port, protocol, rules)
+	result := portscanner.KillConfirmedProcessByPortWithProtector(ctx, port, protocol, expectedPID, createdAt, rules)
 	return a.recordOperationLog(ctx, "kill_process_by_port", port, result)
 }
 
@@ -591,6 +599,9 @@ func appendOperationLogError(result processscanner.OperationResult, err error) p
 	}
 
 	baseMessage := strings.TrimSpace(result.Message)
+	if result.Success {
+		result.Partial = true
+	}
 	logMessage := fmt.Sprintf("Operation log write failed: %v", err)
 	if baseMessage == "" {
 		result.Message = logMessage

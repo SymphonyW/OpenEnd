@@ -7,6 +7,7 @@ const (
 
 // Info is the port occupancy row returned to the Wails frontend.
 type Info struct {
+	CreatedAt   int64  `json:"createdAt"`
 	Port        int    `json:"port"`
 	Protocol    string `json:"protocol"`
 	Status      string `json:"status"`
