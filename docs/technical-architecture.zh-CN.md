@@ -136,7 +136,7 @@ sequenceDiagram
 | 字段 | 数据源 | 执行/缓存策略 | 失败值 |
 | --- | --- | --- | --- |
 | CPU 使用率 | `gopsutil/cpu.Percent(0, false)` | 每次同步采集，保留 1 位小数 | `0` |
-| CPU 型号/核数/频率 | `cpu.Info`、`cpu.Counts`；型号回退到注册表 | 第一次同步采集后进程期内缓存 | 空字符串或 `0` |
+| CPU 型号/核数/频率 | `cpu.Info`、`cpu.Counts`；型号回退到注册表，Windows 频率/物理核数回退到仅查询必需字段的 WMI | 首次同步采集，字段完整后进程期内缓存；不完整时下次请求重试 | 空字符串或 `0`，采集错误写入日志 |
 | 内存 | `mem.VirtualMemory` | 每次同步采集；可用内存取 `Available` | 全部 `0` |
 | GPU 使用率/已用显存/名称 | WMI 性能计数器与控制器 | 后台刷新，最短间隔 5 秒 | 缓存值或零值 |
 | 总显存 | 显卡注册表，失败后 WMI `AdapterRAM` | 首个正值进程期内缓存 | `0` |
@@ -147,7 +147,7 @@ sequenceDiagram
 
 这里有两种泛型缓存：
 
-- `cachedResourceCollector[T]` 在第一次 `Get()` 时同步执行，成功后永久返回缓存值。CPU 静态信息使用此策略。
+- `cachedResourceCollector[T]` 在第一次 `Get()` 时同步执行，通过可选的 `valid` 检查后永久返回缓存值。CPU 静态信息要求型号、频率、物理核数和逻辑处理器数全部有效；不完整时返回已取得的字段，下次 `Get()` 重试。
 - `asyncCachedCollector[T]` 在满足最短刷新间隔且没有在途任务时启动后台 goroutine，当前调用立即返回上一份缓存；还没有缓存时返回类型零值。GPU、线程数和端口数使用此策略。
 
 ```mermaid
