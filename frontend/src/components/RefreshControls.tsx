@@ -10,6 +10,7 @@ export default function RefreshControls({t, updatedAt}: Props) {
 
     return (
         <div className="refresh-controls">
+            <span className="refresh-indicator" aria-hidden="true"/>
             <span>{t('dashboard.lastUpdated')}: {new Date(updatedAt).toLocaleTimeString()}</span>
         </div>
     );

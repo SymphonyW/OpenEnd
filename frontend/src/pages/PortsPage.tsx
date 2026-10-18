@@ -3,7 +3,6 @@ import type {KeyboardEvent, MouseEvent} from 'react';
 import ProcessNameCell from '../components/ProcessNameCell';
 import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
-import RefreshControls from '../components/RefreshControls';
 import {ProjectAssignment, ProjectCell, ProjectGroupRow, ProjectToolbar} from '../components/ProjectGrouping';
 import {buildProjectGroups, matchingOwner, ownershipOf, projectRows, projectsChangedEvent, useProjectView} from '../services/projects';
 import {operationText, operationVariant, type OperationVariant} from '../services/operations';
@@ -259,8 +258,7 @@ function PortsPage({page, t}: PortsPageProps) {
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
-            <RefreshControls t={t} updatedAt={lastUpdated}/>
-            <ProjectToolbar view={projectView} processes={processes} t={t}/>
+            <ProjectToolbar view={projectView} processes={processes} count={visiblePorts.length} total={ports.length} filtered={isFiltered} updatedAt={lastUpdated} t={t}/>
             <div className="resource-toolbar port-toolbar">
                 <label className="filter-field compact-filter">
                     <span>{t('filter.port')}</span>
@@ -306,9 +304,6 @@ function PortsPage({page, t}: PortsPageProps) {
                         ))}
                     </select>
                 </label>
-                <span className="resource-list-count">
-                    {visiblePorts.length}{isFiltered && ` / ${ports.length}`} {t('common.items')}
-                </span>
             </div>
 
             {errorMessage && <StatusMessage variant="error">{errorMessage}</StatusMessage>}

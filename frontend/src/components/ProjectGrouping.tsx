@@ -5,11 +5,14 @@ import type {ProjectGroup, ProjectPage, ProjectView} from '../services/projects'
 import type {ProcessInfo} from '../types/processes';
 import type {Translator, TranslationKey} from '../services/i18n';
 import {formatMemorySize} from '../services/systemResources';
+import RefreshControls from './RefreshControls';
 
-export function ProjectToolbar({view, processes, t}: {view: ProjectView; processes: ProcessInfo[]; t: Translator}) {
+export function ProjectToolbar({view, processes, count, total = processes.length, filtered, updatedAt, t}: {
+    view: ProjectView; processes: ProcessInfo[]; count: number; total?: number; filtered: boolean; updatedAt?: number; t: Translator;
+}) {
     const groups = new Map(processes.map(ownershipOf).filter(group => group.key).map(group => [group.key, group]));
     return <div className="project-toolbar">
-        <div className="sort-controls" role="group" aria-label={t('projects.view')}>
+        <div className="sort-controls project-view-switch" role="group" aria-label={t('projects.view')}>
             <button className={`sort-button${!view.grouped ? ' active' : ''}`} aria-pressed={!view.grouped} onClick={() => view.setGrouped(false)}>{t('projects.all')}</button>
             <button className={`sort-button${view.grouped ? ' active' : ''}`} aria-pressed={view.grouped} onClick={() => view.setGrouped(true)}>{t('projects.grouped')}</button>
         </div>
@@ -21,23 +24,51 @@ export function ProjectToolbar({view, processes, t}: {view: ProjectView; process
                 {view.filter !== '*' && view.filter !== '' && !groups.has(view.filter) && <option value={view.filter}>{view.filter}</option>}
             </select>
         </label>
-        {view.grouped && <span className="project-hint">{t('projects.filteredSummary')}</span>}
+        <div className="project-toolbar-status">
+            <span className="resource-list-count" title={view.grouped ? t('projects.filteredSummary') : undefined}>
+                {count}{filtered && ` / ${total}`} {t('common.items')}
+            </span>
+            <RefreshControls t={t} updatedAt={updatedAt}/>
+        </div>
     </div>;
 }
 
 export function ProjectGroupRow<T>({group, view, columns, destination, t}: {group: ProjectGroup<T>; view: ProjectView; columns: number; destination: ProjectPage; t: Translator}) {
     const {navigate} = useContext(ProjectNavigationContext);
     const open = !view.collapsed.has(group.key);
+    const allPorts = group.ports.join(', ');
+    const shownPorts = group.ports.slice(0, 3).join(', ');
     return <tr className="project-group-row"><td colSpan={columns}>
         <div className="project-group-heading">
             <button className="project-group-toggle" aria-expanded={open} onClick={() => view.toggle(group.key)} title={group.path}>
-                <span aria-hidden="true">{open ? '▾' : '▸'}</span>
-                <strong>{group.name || t('projects.ungrouped')}</strong>
-                {group.kind !== 'unknown' && <span className={`ownership-kind ${group.kind}`}>{t(group.kind === 'application' ? 'projects.kindApplication' : 'projects.kindProject')}</span>}
-                {group.path && <span className="project-group-path">{group.path}</span>}
+                <span className="project-group-chevron" aria-hidden="true">▸</span>
+                <span className="project-group-identity">
+                    <span className="project-group-name">
+                        <strong>{group.name || t('projects.ungrouped')}</strong>
+                        {group.kind !== 'unknown' && <span className={`ownership-kind ${group.kind}`}>{t(group.kind === 'application' ? 'projects.kindApplication' : 'projects.kindProject')}</span>}
+                    </span>
+                    {group.path && <span className="project-group-path">{group.path}</span>}
+                </span>
             </button>
-            <span className="project-group-metrics">{group.processCount} {t(group.hasUnknownOwners ? 'projects.knownProcesses' : 'projects.processes')} · {group.hasUnknownOwners ? t('common.unavailable') : formatMemorySize(group.memoryBytes)} · {t('projects.servicePorts')}: {group.ports.join(', ') || (group.hasUnknownOwners ? t('common.unavailable') : t('common.none'))}</span>
-            {group.path && <button className="project-link" onClick={() => navigate(destination, group.key)}>{t(destination === 'ports' ? 'projects.viewPorts' : 'projects.viewProcesses')}</button>}
+            <span className="project-group-metrics" title={t('projects.filteredSummary')}>
+                <span className="project-group-count" title={t(group.hasUnknownOwners ? 'projects.knownProcesses' : 'projects.processes')}>
+                    {group.processCount} {t('projects.processes')}{group.hasUnknownOwners && ' + ?'}
+                </span>
+                <span className="project-group-stat-divider" aria-hidden="true"> · </span>
+                <span className="project-group-memory">{group.hasUnknownOwners ? t('common.unavailable') : formatMemorySize(group.memoryBytes)}</span>
+            </span>
+            <span className="project-group-ports" title={allPorts || t('projects.servicePorts')}>
+                <span className="project-group-ports-label">{t('projects.servicePorts')}</span>
+                <span className="project-group-ports-values mono">
+                    <span className="project-group-port-numbers">{shownPorts || (group.hasUnknownOwners ? t('common.unavailable') : t('common.none'))}</span>
+                    {group.ports.length > 3 && <span className="project-group-more"> +{group.ports.length - 3}</span>}
+                </span>
+            </span>
+            <span className="project-group-action">
+                {group.path && <button className="project-link" onClick={() => navigate(destination, group.key)}>
+                    {t(destination === 'ports' ? 'projects.viewPorts' : 'projects.viewProcesses')}<span aria-hidden="true">↗</span>
+                </button>}
+            </span>
         </div>
     </td></tr>;
 }

@@ -46,10 +46,7 @@ function App() {
                 t={t}
                 onSelectPage={selectPage}
             />
-            <main className="main-content">
-                <header className="workspace-header">
-                    <h1>{activePage.label}</h1>
-                </header>
+            <main className="main-content" aria-label={activePage.label}>
                 <ProjectNavigationContext.Provider value={{target: projectTarget, navigate: (page, path) => {
                     setProjectTarget(current => ({page, path, sequence: (current?.sequence ?? 0) + 1}));
                     selectPage(page);

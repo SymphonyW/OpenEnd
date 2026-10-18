@@ -14,7 +14,6 @@ function FeedbackPage({page, t}: FeedbackPageProps) {
         <section className="page-panel feedback-page" aria-label={page.title}>
             <div className="feedback-content">
                 <div className="feedback-primary">
-                    <span className="feedback-eyebrow">{page.eyebrow}</span>
                     <p>{page.description}</p>
                     <a className="primary-action-button feedback-mail-button" href={mailtoHref}>
                         {t('feedback.mailAction')}

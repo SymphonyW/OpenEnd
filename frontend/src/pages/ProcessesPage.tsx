@@ -3,7 +3,6 @@ import type {KeyboardEvent, MouseEvent} from 'react';
 import ProcessNameCell from '../components/ProcessNameCell';
 import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
-import RefreshControls from '../components/RefreshControls';
 import {ProjectAssignment, ProjectCell, ProjectGroupRow, ProjectToolbar} from '../components/ProjectGrouping';
 import {buildProjectGroups, ownershipOf, projectRows, projectsChangedEvent, useProjectView} from '../services/projects';
 import {operationText, operationVariant, type OperationVariant} from '../services/operations';
@@ -274,8 +273,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
-            <RefreshControls t={t} updatedAt={lastUpdated}/>
-            <ProjectToolbar view={projectView} processes={processes} t={t}/>
+            <ProjectToolbar view={projectView} processes={processes} count={visibleProcesses.length} filtered={isFiltered} updatedAt={lastUpdated} t={t}/>
             <div className="resource-toolbar process-toolbar">
                 <label className="filter-field">
                     <span>{t('filter.processName')}</span>
@@ -316,9 +314,6 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
                         {t('sort.cpu')}
                     </button>
                 </div>
-                <span className="resource-list-count">
-                    {visibleProcesses.length}{isFiltered && ` / ${processes.length}`} {t('common.items')}
-                </span>
             </div>
 
             {errorMessage && <StatusMessage variant="error">{errorMessage}</StatusMessage>}

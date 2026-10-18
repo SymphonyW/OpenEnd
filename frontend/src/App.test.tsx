@@ -393,7 +393,7 @@ describe('App layout navigation', () => {
         expect(screen.getByRole('button', {name: 'Feedback'})).toBeInTheDocument();
         expect(screen.getByRole('button', {name: 'Settings'})).toBeInTheDocument();
         expect(await screen.findByLabelText('CPU usage chart')).toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Performance'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Performance'})).not.toBeInTheDocument();
         expect(screen.queryByText('System overview')).not.toBeInTheDocument();
     });
 
@@ -421,7 +421,7 @@ describe('App layout navigation', () => {
 
         expect(screen.getByRole('button', {name: 'Ports'})).toHaveAttribute('aria-current', 'page');
         expect(await screen.findByText('node.exe')).toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Ports'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Ports'})).not.toBeInTheDocument();
         expect(screen.queryByText('Review local TCP and UDP ports and the owning process.')).not.toBeInTheDocument();
     });
 
@@ -431,31 +431,34 @@ describe('App layout navigation', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Feedback'}));
 
         expect(screen.getByRole('button', {name: 'Feedback'})).toHaveAttribute('aria-current', 'page');
-        expect(screen.getByRole('heading', {level: 1, name: 'Feedback'})).toBeInTheDocument();
-        expect(screen.getAllByRole('heading', {name: 'Feedback'})).toHaveLength(1);
+        expect(screen.queryByRole('heading', {name: 'Feedback'})).not.toBeInTheDocument();
+        expect(screen.getByRole('main', {name: 'Feedback'})).toBeInTheDocument();
         expect(screen.getByText('xinzhanwu1201@gmail.com')).toBeInTheDocument();
         expect(screen.getByText('Email template')).toBeInTheDocument();
         expect(screen.getByText(/Related process or port:/)).toBeInTheDocument();
         expect(screen.getByRole('link', {name: 'Email feedback'})).toHaveAttribute('href', expect.stringContaining('mailto:xinzhanwu1201@gmail.com'));
     });
 
-    it('shows one compact page title without redundant descriptions', async () => {
+    it('uses sidebar navigation to identify pages without duplicate workspace titles', async () => {
         render(<App/>);
 
         expect(await screen.findByLabelText('CPU usage chart')).toBeInTheDocument();
         expect(screen.queryByText('System overview')).not.toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Performance'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Performance'})).not.toBeInTheDocument();
+        expect(screen.getByRole('main', {name: 'Performance'})).toBeInTheDocument();
         expect(screen.queryByText('Monitor CPU, memory, GPU, VRAM, processes, and occupied ports in real time.')).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
         expect(await screen.findByText('node.exe')).toBeInTheDocument();
         expect(screen.queryByText('Process monitor')).not.toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Processes'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Processes'})).not.toBeInTheDocument();
+        expect(screen.getByRole('main', {name: 'Processes'})).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
         expect(await screen.findByText('redis-server.exe')).toBeInTheDocument();
         expect(screen.queryByText('Protection settings')).not.toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Settings'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Settings'})).not.toBeInTheDocument();
+        expect(screen.getByRole('main', {name: 'Settings'})).toBeInTheDocument();
     });
 
     it('loads Dashboard resource metrics and refreshes them automatically', async () => {
@@ -608,7 +611,7 @@ describe('App layout navigation', () => {
         });
 
         expect(screen.getByRole('button', {name: '进程'})).toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: '设置'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: '设置'})).not.toBeInTheDocument();
         expect(screen.getByLabelText('语言')).toHaveValue('zh');
     });
 
@@ -1023,7 +1026,7 @@ describe('App layout navigation', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Cleanup'}));
 
         expect(await screen.findByText('node.exe')).toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Cleanup'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Cleanup'})).not.toBeInTheDocument();
         expect(screen.getByRole('toolbar', {name: 'Cleanup actions'})).toHaveClass('cleanup-toolbar');
         expect(screen.getByText('Development process candidates')).toBeInTheDocument();
         expect(screen.getByText('Selected')).toBeInTheDocument();
@@ -1399,7 +1402,7 @@ describe('App layout navigation', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Logs'}));
 
         await act(async () => {});
-        expect(screen.queryByRole('heading', {name: 'Logs'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Logs'})).not.toBeInTheDocument();
         expect(screen.getByText('No operation logs found.')).toBeInTheDocument();
         expect(screen.queryByRole('button', {name: 'Refresh Logs'})).not.toBeInTheDocument();
 
