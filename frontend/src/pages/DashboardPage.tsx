@@ -5,7 +5,7 @@ import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {formatMemorySize, formatPercent, loadSystemResourceInfo, mergeResourceInfo, resourceStatus} from '../services/systemResources';
 import type {Translator} from '../services/i18n';
 import type {PageDefinition} from '../types/navigation';
-import type {SystemResourceInfo, ResourceMetric} from '../types/systemResources';
+import type {SystemResourceInfo, ResourceMetric, ResourceStatus} from '../types/systemResources';
 import './DashboardPage.css';
 
 const refreshInterval = 1000;
@@ -24,11 +24,16 @@ interface Metric {
 }
 
 function graphPoints(history: Sample[], key: ResourceKey) {
-    const start = history[0]?.time ?? 0;
+    // Metrics become available independently. Leading pending samples are not
+    // gaps in an otherwise valid series, and must not suppress its area fill.
+    const first = history.findIndex(sample => sample[key] !== null);
+    if (first < 0) return [];
+    const samples = history.slice(first);
+    const start = samples[0].time;
     const end = history[history.length - 1]?.time ?? 0;
-    return history.flatMap((sample, index) => {
+    return samples.flatMap((sample, index) => {
         const value = sample[key];
-        return value === null ? [] : [{x: end > start ? percent((sample.time - start) / (end - start) * 100) : 100, y: 100 - value, value, gap: index > 0 && history[index - 1][key] === null}];
+        return value === null ? [] : [{time: sample.time, x: end > start ? percent((sample.time - start) / (end - start) * 100) : 100, y: 100 - value, value, gap: index > 0 && samples[index - 1][key] === null}];
     });
 }
 function graphSegments(points: ReturnType<typeof graphPoints>) {
@@ -38,6 +43,21 @@ function graphSegments(points: ReturnType<typeof graphPoints>) {
         segments[segments.length - 1].push(point);
     }
     return segments;
+}
+
+function ResourceLines({points, filled = false}: {points: ReturnType<typeof graphPoints>; filled?: boolean}) {
+    return <>{graphSegments(points).map((segment, index) => {
+        const first = segment[0];
+        const last = segment[segment.length - 1];
+        const coordinates = segment.map(point => point.x + ',' + point.y).join(' ');
+        return <g key={index}>
+            {filled && segment.length > 1 && <path className="performance-area"
+                d={`M${first.x},100 L${coordinates.replaceAll(' ', ' L')} L${last.x},100 Z`}/>}
+            <polyline className={filled ? 'performance-line' : undefined} points={coordinates}/>
+            {segment.length === 1 && <line className={filled ? 'performance-line' : undefined}
+                x1={Math.max(0, first.x - 0.6)} x2={Math.min(100, first.x + 0.6)} y1={first.y} y2={first.y}/>}
+        </g>;
+    })}</>;
 }
 
 function DashboardPage({page, t}: Props) {
@@ -72,7 +92,8 @@ function DashboardPage({page, t}: Props) {
                 }
                 infoRef.current = {...previous, metrics};
                 setInfo(infoRef.current);
-                setHistory(current => [...current, {time: Date.now(), cpu: null, memory: null, gpu: null, vram: null}].slice(-maxHistorySamples));
+                const time = Date.now();
+                setHistory(current => [...current.filter(item => item.time >= time - historyWindow), {time, cpu: null, memory: null, gpu: null, vram: null}].slice(-maxHistorySamples));
             }
             setError(t('dashboard.error'));
         } finally {
@@ -104,7 +125,7 @@ function DashboardPage({page, t}: Props) {
                                 aria-label={resource.title} aria-pressed={selected === resource.key}
                                 onClick={() => setSelected(resource.key)}>
                                 <svg className="resource-mini-chart" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                                    {graphSegments(points).map((segment, index) => <polyline key={index} points={segment.map(point => point.x + ',' + point.y).join(' ')}/>)}
+                                    <ResourceLines points={points}/>
                                 </svg>
                                 <span className="resource-select-text">
                                     <span className="resource-select-title">{resource.title}</span>
@@ -120,7 +141,7 @@ function DashboardPage({page, t}: Props) {
                         <h2>{active.title}</h2>
                         <span>{subtitle}</span>
                     </div>
-                    <ResourceGraph key={selected} history={history} resourceKey={selected} title={active.title} ariaLabel={active.aria} t={t}/>
+                    <ResourceGraph key={selected} history={history} resourceKey={selected} status={resourceStatus(info, selected)} title={active.title} ariaLabel={active.aria} t={t}/>
                     <dl className="performance-metrics">
                         {metrics.map(metric => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>)}
                     </dl>
@@ -253,16 +274,13 @@ function padTime(value: number): string {
     return value.toString().padStart(2, '0');
 }
 
-function ResourceGraph({history, resourceKey, title, ariaLabel, t}: {
-    history: Sample[]; resourceKey: ResourceKey; title: string; ariaLabel: string; t: Translator;
+function ResourceGraph({history, resourceKey, status, title, ariaLabel, t}: {
+    history: Sample[]; resourceKey: ResourceKey; status: ResourceStatus; title: string; ariaLabel: string; t: Translator;
 }) {
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
     const points = graphPoints(history, resourceKey);
     const active = activeIndex === null ? null : points[Math.min(activeIndex, points.length - 1)];
-    const pointsString = points.map(point => point.x + ',' + point.y).join(' ');
-    const area = points.length > 1 && !points.some(point => point.gap)
-        ? 'M' + points[0].x + ',100 L' + pointsString.replaceAll(' ', ' L') + ' L100,100 Z'
-        : '';
+    const duration = points.length ? Math.max(0, Math.round(((history[history.length - 1]?.time ?? 0) - points[0].time) / 1000)) : 0;
 
     const handleMove = (event: MouseEvent<SVGSVGElement>) => {
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -289,14 +307,14 @@ function ResourceGraph({history, resourceKey, title, ariaLabel, t}: {
                         {[20, 40, 60, 80].map(value => <line key={'h' + value} x1="0" x2="100" y1={value} y2={value}/>)}
                         {[10, 20, 30, 40, 50, 60, 70, 80, 90].map(value => <line key={'v' + value} y1="0" y2="100" x1={value} x2={value}/>)}
                     </g>
-                    {area && <path className="performance-area" d={area}/>}
-                    {graphSegments(points).map((segment, index) => <polyline key={index} className="performance-line" points={segment.map(point => point.x + ',' + point.y).join(' ')}/>)}
-                    {points.length === 1 && <line className="performance-line" x1="99.6" x2="100" y1={points[0].y} y2={points[0].y}/>}
+                    <ResourceLines points={points} filled/>
                     {active && <line className="performance-crosshair" x1={active.x} x2={active.x} y1="0" y2="100"/>}
                 </svg>
+                {points.length === 0 && <span className="performance-chart-status">{t(status.state === 'collecting' ? 'resource.collecting' : 'resource.unavailable')}</span>}
+                {points.length === 1 && status.state === 'ready' && <span className="performance-chart-status">{t('dashboard.chart.firstSample')}</span>}
                 {active && <output className="chart-hover-tooltip">{title} {formatPercent(active.value)}</output>}
             </div>
-            <div className="performance-chart-label"><span>{t('dashboard.chart.sixtySeconds')}</span><span>{t('dashboard.chart.now')}</span></div>
+            <div className="performance-chart-label"><span>{duration >= 60 ? t('dashboard.chart.sixtySeconds') : `${duration} ${t('dashboard.chart.secondsUnit')}`}</span><span>{t('dashboard.chart.now')}</span></div>
             <span className="visually-hidden" id="chart-keyboard-hint">{t('dashboard.chart.keyboardHint')}</span>
         </div>
     );

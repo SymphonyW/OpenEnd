@@ -310,8 +310,10 @@ function CleanupPage({page, t}: CleanupPageProps) {
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
-            <RefreshControls t={t} updatedAt={lastUpdated}/>
-            <p className="refresh-controls">{t('cleanup.notice')}</p>
+            <div className="cleanup-statusbar">
+                <p className="cleanup-notice">{t('cleanup.notice')}</p>
+                <RefreshControls t={t} updatedAt={lastUpdated}/>
+            </div>
             {ignored.size > 0 && <button type="button" className="sort-button" onClick={() => setIgnored(new Set())}>{t('cleanup.restore')} ({ignored.size})</button>}
             <div className="resource-toolbar cleanup-toolbar" role="toolbar" aria-label={t('cleanup.actions')}>
                 <div className="cleanup-toolbar-stats">

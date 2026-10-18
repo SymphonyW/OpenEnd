@@ -591,6 +591,50 @@ describe('App layout navigation', () => {
         expect(screen.getByLabelText('VRAM usage chart')).toBeInTheDocument();
     });
 
+    it('draws delayed GPU and VRAM series from their own first sample while preserving later collection gaps', async () => {
+        vi.useFakeTimers();
+        const ready = {state: 'ready' as const, updatedAt: 1000, error: ''};
+        const collecting = {state: 'collecting' as const, updatedAt: 0, error: ''};
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({metrics: {cpu: ready, gpu: collecting, vram: collecting}}));
+        render(<App/>);
+        await act(async () => {});
+        fireEvent.click(screen.getByRole('button', {name: 'GPU'}));
+        expect(screen.getByLabelText('GPU usage chart').querySelector('polyline')).toBeNull();
+        expect(screen.getByLabelText('GPU usage chart').parentElement).toHaveTextContent('Collecting');
+        await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({gpuPercent: 0, metrics: {cpu: ready, gpu: ready, vram: collecting}}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        expect(screen.getByLabelText('GPU usage chart').querySelector('polyline')!.getAttribute('points')).toBe('100,100');
+        expect(screen.getByText('First sample received; waiting for more data…')).toBeInTheDocument();
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({gpuPercent: 20, metrics: {cpu: ready, gpu: ready, vram: ready}}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        const gpu = screen.getByLabelText('GPU usage chart');
+        expect(gpu.querySelector('polyline')!.getAttribute('points')).toBe('0,100 100,80');
+        expect(gpu.querySelector('.performance-area')).not.toBeNull();
+        expect(screen.queryByText('First sample received; waiting for more data…')).not.toBeInTheDocument();
+        const miniGPU = within(screen.getByRole('button', {name: 'GPU'})).getByText('GPU').closest('button')!.querySelector('polyline');
+        expect(miniGPU!.getAttribute('points')).toBe('0,100 100,80');
+
+        fireEvent.click(screen.getByRole('button', {name: 'VRAM'}));
+        expect(screen.getByLabelText('VRAM usage chart').querySelector('polyline')!.getAttribute('points')).toMatch(/^100,/);
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        const vram = screen.getByLabelText('VRAM usage chart');
+        expect(vram.querySelector('polyline')!.getAttribute('points')).toMatch(/^0,[^ ]+ 100,/);
+        expect(vram.querySelector('.performance-area')).not.toBeNull();
+        expect(vram.closest('.performance-chart')).toHaveTextContent('1 s');
+
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({metrics: {cpu: ready, gpu: {state: 'unavailable', updatedAt: 0, error: 'Counter failed'}, vram: ready}}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({metrics: {cpu: ready, gpu: ready, vram: ready}}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+        fireEvent.click(screen.getByRole('button', {name: 'GPU'}));
+        const recoveredGPU = screen.getByLabelText('GPU usage chart');
+        expect(recoveredGPU.querySelectorAll('polyline')).toHaveLength(2);
+        expect(recoveredGPU.querySelectorAll('.performance-area')).toHaveLength(2);
+        expect(recoveredGPU.querySelectorAll('polyline')[1].getAttribute('points')).not.toMatch(/^0,/);
+    });
+
     it('shows interactive Dashboard chart values when hovering a chart', async () => {
         render(<App/>);
 

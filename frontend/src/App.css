@@ -373,6 +373,9 @@ button:disabled { cursor: default; opacity: .45; }
 .process-context-menu button:hover:not(:disabled) { background: var(--surface-muted); }
 .process-context-menu button.danger-menu-item { color: var(--danger); }
 .cleanup-toolbar { align-items: center; justify-content: space-between; }
+.cleanup-statusbar { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 24px; padding: 12px 20px; }
+.cleanup-notice { flex: 1; min-width: 0; margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.6; }
+.cleanup-statusbar .refresh-controls { flex-shrink: 0; min-height: 0; padding: 0; }
 .cleanup-toolbar-stats { display: flex; align-items: center; gap: 28px; }
 .cleanup-toolbar-stat { display: flex; align-items: baseline; gap: 10px; }
 .cleanup-toolbar-stat span { color: var(--text-muted); font-size: 12px; }
