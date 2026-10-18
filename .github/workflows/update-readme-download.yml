@@ -1,0 +1,46 @@
+name: Update README download links
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: readme-download-links
+  cancel-in-progress: false
+
+jobs:
+  update-download-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Check the download link updater
+        run: node --test scripts/update-readme-download.test.cjs
+
+      - name: Resolve the latest published installer
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const {updateReadmeDownloads} = require('./scripts/update-readme-download.cjs');
+            const {data: release} = await github.rest.repos.getLatestRelease(context.repo);
+            release.assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              ...context.repo, release_id: release.id, per_page: 100,
+            });
+            const result = updateReadmeDownloads(process.cwd(), release);
+            core.info(JSON.stringify(result));
+
+      - name: Commit updated download links
+        run: |
+          git add README.md README.zh-CN.md
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: update latest installer download links'
+          git pull --rebase
+          git push

@@ -18,9 +18,9 @@
 
 # OpenEnd
 
-[Download Windows installer](https://github.com/SymphonyW/OpenEnd/releases/latest)
+[Download Windows installer](https://github.com/SymphonyW/OpenEnd/releases/download/v2.1.3/OpenEnd-v2.1.3-windows-amd64-installer.exe)
 
-[Blog post](https://symphonyw.github.io/p/openend/)
+[Blog post of OpenEnd](https://symphonyw.github.io/p/openend/)
 
 OpenEnd is a Windows desktop application for developers who need a clear view of local processes, ports, and system resource usage.
 

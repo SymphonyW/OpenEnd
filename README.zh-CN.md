@@ -18,9 +18,9 @@
 
 # OpenEnd
 
-[Download Windows installer](https://github.com/SymphonyW/OpenEnd/releases/latest)
+[下载Windows版本的安装包](https://github.com/SymphonyW/OpenEnd/releases/download/v2.1.3/OpenEnd-v2.1.3-windows-amd64-installer.exe)
 
-[Blog post](https://symphonyw.github.io/zh-cn/p/openend/)
+[本项目的博客文章](https://symphonyw.github.io/zh-cn/p/openend/)
 
 OpenEnd 是一个面向开发者的 Windows 桌面资源管理工具，用于快速查看本机进程、端口占用和系统资源使用情况。
 
