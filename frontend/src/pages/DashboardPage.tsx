@@ -100,7 +100,7 @@ function DashboardPage({page, t}: Props) {
             setLoading(false);
         }
     }, [t]);
-    useSequentialAutoRefresh(load, refreshInterval);
+    useSequentialAutoRefresh(load, refreshInterval, {runInBackground: true});
 
     const resources = [
         {key: 'cpu' as const, title: t('dashboard.chart.cpu'), aria: t('dashboard.chart.cpuAria')},

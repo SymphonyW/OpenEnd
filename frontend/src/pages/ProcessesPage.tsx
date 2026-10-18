@@ -84,7 +84,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
         }
     }, [t, relatedUpdated]);
 
-    useSequentialAutoRefresh(loadProcesses, processRefreshIntervalMs, projectsChangedEvent);
+    useSequentialAutoRefresh(loadProcesses, processRefreshIntervalMs, {refreshEvent: projectsChangedEvent});
 
     const loadDetail = useCallback(async (pid: number) => {
         setIsDetailLoading(true);

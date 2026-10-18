@@ -437,6 +437,7 @@ describe('App layout navigation', () => {
         expect(screen.getByText('Email template')).toBeInTheDocument();
         expect(screen.getByText(/Related process or port:/)).toBeInTheDocument();
         expect(screen.getByRole('link', {name: 'Email feedback'})).toHaveAttribute('href', expect.stringContaining('mailto:xinzhanwu1201@gmail.com'));
+        await act(async () => {});
     });
 
     it('uses sidebar navigation to identify pages without duplicate workspace titles', async () => {
@@ -1516,7 +1517,7 @@ describe('App layout navigation', () => {
         await waitFor(() => expect(within(table).queryByText('node.exe')).not.toBeInTheDocument());
     });
 
-    it('keeps updating and preserves filters sorting and graph history across navigation', async () => {
+    it('keeps Performance updating in the background and preserves filters sorting and graph history across navigation', async () => {
         vi.useFakeTimers();
         render(<App/>);
         await act(async () => {});
@@ -1531,15 +1532,16 @@ describe('App layout navigation', () => {
         const calls = getProcessListMock.mock.calls.length;
         await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
         expect(getProcessListMock).toHaveBeenCalledTimes(calls + 2);
-        expect(getSystemResourceInfoMock).toHaveBeenCalledTimes(dashboardCalls);
+        expect(getSystemResourceInfoMock).toHaveBeenCalledTimes(dashboardCalls + 10);
         fireEvent.click(screen.getByRole('button', {name: 'Performance'}));
         await act(async () => {});
         const retainedPoints = screen.getByLabelText('CPU usage chart').querySelector('polyline')!.getAttribute('points')!.split(' ');
-        expect(retainedPoints).toHaveLength(points.length + 1);
+        expect(retainedPoints).toHaveLength(points.length + 10);
         fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
         expect(screen.getByLabelText('Process name')).toHaveValue('node');
         expect(screen.getByRole('button', {name: 'CPU'})).toHaveAttribute('aria-pressed', 'true');
         expect(screen.queryByRole('button', {name: /Pause refresh|Resume refresh/})).not.toBeInTheDocument();
+        await act(async () => {});
     });
 
     it('retains process rows and the last successful update time after refresh failure', async () => {

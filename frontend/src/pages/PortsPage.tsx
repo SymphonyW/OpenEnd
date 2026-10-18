@@ -79,7 +79,7 @@ function PortsPage({page, t}: PortsPageProps) {
         }
     }, [t, relatedUpdated]);
 
-    useSequentialAutoRefresh(loadPorts, portRefreshIntervalMs, projectsChangedEvent);
+    useSequentialAutoRefresh(loadPorts, portRefreshIntervalMs, {refreshEvent: projectsChangedEvent});
 
     const loadRelatedLogs = useCallback(async (port: PortInfo) => {
         setLogsErrorMessage('');

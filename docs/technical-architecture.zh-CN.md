@@ -361,7 +361,7 @@ flowchart TD
     SERVICES --> GEN[Wails 生成绑定]
 ```
 
-页面定义由 `getPages(t)` 根据当前翻译函数生成。`PagePanel` 使用明确的条件分发渲染七个页面，而不是 URL 路由。`workspace-body` 以页面 ID 作为 React `key`，切换页面会卸载原页面并重新创建，因此页面的筛选条件、选中项、弹窗、历史曲线与轮询计时都会重置；导航栏自身的折叠状态保留。
+页面定义由 `getPages(t)` 根据当前翻译函数生成。`PagePanel` 使用明确的条件分发渲染七个页面，而不是 URL 路由。`App` 保留已访问页面，通过 `hidden` 切换显示，因此筛选条件、选中项与历史曲线不会因切页重置。Performance 是启动时的默认页面，从应用启动后持续刷新；其他页面通过 `PageActivityContext` 只在活动时轮询。
 
 语言支持中文和英文：
 
@@ -405,7 +405,7 @@ stateDiagram-v2
     Waiting --> [*]: 页面卸载
 ```
 
-实现用 `activeRefreshRef` 保存唯一在途 Promise，即使 StrictMode 重放 effect、刷新周期变化或可见性事件交错，也不会重叠请求。`loaderRef` 始终指向最新函数，但 loader 引用变化不会重启定时器。页面隐藏时清除定时器；恢复可见立即刷新。未被页面 loader 捕获的异常会输出到 `console.error`，随后仍安排下一轮。
+实现用 `activeRefreshRef` 保存唯一在途 Promise，即使 StrictMode 重放 effect、刷新周期变化或可见性事件交错，也不会重叠请求。`loaderRef` 始终指向最新函数，但 loader 引用变化不会重启定时器。默认在页面不活动或窗口隐藏时暂停，恢复后刷新；Performance 显式传入 `{runInBackground: true}`，切页及窗口隐藏均不主动暂停，保持最近 60 秒的曲线历史。该模式仍使用前端计时器，实际间隔可能受 WebView 后台调度影响。选项中的 `refreshEvent` 用于订阅主动刷新事件。未被页面 loader 捕获的异常会输出到 `console.error`，随后仍安排下一轮。
 
 | 页面 | 周期 | 必需请求 | 可降级辅助请求 |
 | --- | ---: | --- | --- |
