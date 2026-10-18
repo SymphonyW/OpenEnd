@@ -65,3 +65,7 @@ export function KillProcessByPort(arg1, arg2, arg3, arg4) {
 export function SetCleanupRuleEnabled(arg1, arg2) {
   return window['go']['main']['App']['SetCleanupRuleEnabled'](arg1, arg2);
 }
+
+export function SetProcessProject(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SetProcessProject'](arg1, arg2, arg3, arg4, arg5);
+}

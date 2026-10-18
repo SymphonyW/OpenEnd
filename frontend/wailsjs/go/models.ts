@@ -341,6 +341,13 @@ export namespace port {
 export namespace process {
 	
 	export class Info {
+	    parentPID: number;
+	    workingDirectory: string;
+	    workingDirectoryError: string;
+	    projectPath: string;
+	    projectName: string;
+	    projectReason: string;
+	    projectRuleSource: string;
 	    createdAt: number;
 	    pid: number;
 	    name: string;
@@ -358,6 +365,13 @@ export namespace process {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.parentPID = source["parentPID"];
+	        this.workingDirectory = source["workingDirectory"];
+	        this.workingDirectoryError = source["workingDirectoryError"];
+	        this.projectPath = source["projectPath"];
+	        this.projectName = source["projectName"];
+	        this.projectReason = source["projectReason"];
+	        this.projectRuleSource = source["projectRuleSource"];
 	        this.createdAt = source["createdAt"];
 	        this.pid = source["pid"];
 	        this.name = source["name"];

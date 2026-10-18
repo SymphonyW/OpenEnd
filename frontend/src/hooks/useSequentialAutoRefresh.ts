@@ -4,7 +4,7 @@ export const PageActivityContext = createContext(true);
 
 export type AutoRefreshLoader = (showLoading?: boolean) => Promise<void> | void;
 
-export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: number) {
+export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: number, refreshEvent?: string) {
     const active = useContext(PageActivityContext);
     const loaderRef = useRef(loader);
     const activeRefreshRef = useRef<Promise<void> | null>(null);
@@ -75,12 +75,19 @@ export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: 
         };
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
+        const handleRequestedRefresh = async () => {
+            if (activeRefreshRef.current) await activeRefreshRef.current;
+            clearScheduledRefresh();
+            void runRefresh(false);
+        };
+        if (refreshEvent) window.addEventListener(refreshEvent, handleRequestedRefresh);
         void runRefresh(true);
 
         return () => {
             isDisposed = true;
             clearScheduledRefresh();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (refreshEvent) window.removeEventListener(refreshEvent, handleRequestedRefresh);
         };
-    }, [intervalMs, active]);
+    }, [intervalMs, active, refreshEvent]);
 }

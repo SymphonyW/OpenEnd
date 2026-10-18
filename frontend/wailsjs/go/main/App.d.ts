@@ -37,3 +37,5 @@ export function KillProcessByPID(arg1:number,arg2:number):Promise<process.Operat
 export function KillProcessByPort(arg1:number,arg2:string,arg3:number,arg4:number):Promise<process.OperationResult>;
 
 export function SetCleanupRuleEnabled(arg1:string,arg2:boolean):Promise<Array<config.CleanupRule>>;
+
+export function SetProcessProject(arg1:number,arg2:number,arg3:string,arg4:boolean,arg5:boolean):Promise<void>;

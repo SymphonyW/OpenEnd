@@ -4,6 +4,8 @@ import ProcessNameCell from '../components/ProcessNameCell';
 import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
 import RefreshControls from '../components/RefreshControls';
+import {ProjectAssignment, ProjectCell, ProjectGroupRow, ProjectToolbar} from '../components/ProjectGrouping';
+import {buildProjectGroups, projectKey, projectRows, projectsChangedEvent, useProjectView} from '../services/projects';
 import {operationText, operationVariant, type OperationVariant} from '../services/operations';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {formatMemorySize, formatPercent, isHighMemoryUsage} from '../services/systemResources';
@@ -37,6 +39,7 @@ interface ProcessContextMenu {
 }
 
 function ProcessesPage({page, t}: ProcessesPageProps) {
+    const projectView = useProjectView('processes');
     const [processes, setProcesses] = useState<ProcessInfo[]>([]);
     const [processPorts, setProcessPorts] = useState<PortInfo[]>([]);
     const [nameSearch, setNameSearch] = useState('');
@@ -55,6 +58,10 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
     const [isDetailLoading, setIsDetailLoading] = useState(false);
     const [detailErrorMessage, setDetailErrorMessage] = useState('');
     const [contextMenu, setContextMenu] = useState<ProcessContextMenu | null>(null);
+
+    useEffect(() => {
+        if (projectView.navigationSequence > 0) { setNameSearch(''); setPidSearch(''); }
+    }, [projectView.navigationSequence]);
 
     const loadProcesses = useCallback(async (showLoading = true) => {
         if (showLoading) {
@@ -78,7 +85,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
         }
     }, [t, relatedUpdated]);
 
-    useSequentialAutoRefresh(loadProcesses, processRefreshIntervalMs);
+    useSequentialAutoRefresh(loadProcesses, processRefreshIntervalMs, projectsChangedEvent);
 
     const loadDetail = useCallback(async (pid: number) => {
         setIsDetailLoading(true);
@@ -240,11 +247,12 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
         return processes
             .filter((process) => {
                 const matchesName = normalizedNameSearch === ''
-                    || process.name.toLowerCase().includes(normalizedNameSearch);
+                    || process.name.toLowerCase().includes(normalizedNameSearch)
+                    || (process.projectPath || '').toLowerCase().includes(normalizedNameSearch);
                 const matchesPid = normalizedPidSearch === ''
                     || process.pid.toString().includes(normalizedPidSearch);
 
-                return matchesName && matchesPid;
+                return matchesName && matchesPid && (projectView.filter === '*' || projectKey(process.projectPath) === projectView.filter);
             })
             .sort((left, right) => {
                 if (sortKey === 'cpu') {
@@ -253,15 +261,20 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
 
                 return right.memoryBytes - left.memoryBytes;
             });
-    }, [nameSearch, pidSearch, processes, sortKey]);
+    }, [nameSearch, pidSearch, processes, sortKey, projectView.filter]);
+
+    const projectGroups = useMemo(() => buildProjectGroups(visibleProcesses, process => process, processPorts), [visibleProcesses, processPorts]);
+    const rows = projectRows(projectGroups, visibleProcesses, projectView);
+    const selectedProjectProcess = processes.find(process => process.pid === processDetail?.pid && process.createdAt === processDetail?.createdAt);
 
     const portsByPID = useMemo(() => groupPortsByPID(processPorts), [processPorts]);
-    const isFiltered = nameSearch.trim() !== '' || pidSearch.trim() !== '';
+    const isFiltered = nameSearch.trim() !== '' || pidSearch.trim() !== '' || projectView.filter !== '*';
     const emptyMessage = isFiltered ? t('processes.emptyFiltered') : t('processes.empty');
 
     return (
         <section className="page-panel process-page" aria-label={page.title}>
             <RefreshControls t={t} updatedAt={lastUpdated}/>
+            <ProjectToolbar view={projectView} processes={processes} t={t}/>
             <div className="resource-toolbar process-toolbar">
                 <label className="filter-field">
                     <span>{t('filter.processName')}</span>
@@ -317,7 +330,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
                 <StatusMessage variant="empty">{emptyMessage}</StatusMessage>
             )}
 
-            {visibleProcesses.length > 0 && (
+            {(visibleProcesses.length > 0 || selectedDetailPID !== null) && (
                 <div className={selectedDetailPID !== null ? 'process-detail-layout has-detail' : 'process-detail-layout'}>
                     <ScrollableDataTable
                         className="compact-table-wrap"
@@ -332,12 +345,15 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
                                     <th className="metric-heading" aria-sort={sortKey === 'memory' ? 'descending' : undefined}>{t('field.memory')}</th>
                                     <th>{t('field.ports')}</th>
                                     <th>{t('field.protected')}</th>
+                                    <th>{t('projects.project')}</th>
                                     <th>{t('field.path')}</th>
                                     <th>{t('field.command')}</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {visibleProcesses.map((process) => {
+                                {rows.map(entry => {
+                                    if ('group' in entry) return <ProjectGroupRow key={`group:${entry.group.key}`} group={entry.group} view={projectView} columns={9} destination="ports" t={t}/>;
+                                    const process = entry.row;
                                     const commandLine = process.commandLine || t('common.unavailable');
                                     const path = process.path || t('common.unavailable');
                                     const isSelected = selectedDetailPID === process.pid || contextMenu?.process.pid === process.pid;
@@ -373,6 +389,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
                                                     {process.isProtected ? t('badge.protected') : t('badge.standard')}
                                                 </span>
                                             </td>
+                                            <td><ProjectCell process={process} t={t}/></td>
                                             <td className="muted-cell compact-path-cell" title={path}>{path}</td>
                                             <td className="muted-cell" title={commandLine}>
                                                 <span className="command-cell" title={commandLine}>{commandLine}</span>
@@ -429,6 +446,7 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
 
                         {processDetail && (
                             <div className="detail-drawer-body">
+                                {selectedProjectProcess && <ProjectAssignment key={`${selectedProjectProcess.pid}:${selectedProjectProcess.createdAt}`} process={selectedProjectProcess} processes={processes} t={t}/>}
                                 <div className="detail-badge-row">
                                     <span className={processDetail.isProtected ? 'protected-badge' : 'standard-badge'}>
                                         {processDetail.isProtected ? t('badge.protected') : t('badge.standard')}

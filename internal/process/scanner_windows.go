@@ -9,10 +9,12 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unsafe"
 
 	"openend/internal/config"
 
 	gopsprocess "github.com/shirou/gopsutil/v3/process"
+	"golang.org/x/sys/windows"
 )
 
 // List scans Windows processes and returns a best-effort snapshot.
@@ -43,6 +45,7 @@ func ListWithProtector(ctx context.Context, protector Protector) ([]Info, error)
 	}
 
 	processes := make([]Info, 0, len(pids))
+	parents := parentProcessIDs()
 	seenPIDs := make(map[int32]struct{}, len(pids))
 	sampledAt := time.Now()
 	for _, pid := range pids {
@@ -51,7 +54,7 @@ func ListWithProtector(ctx context.Context, protector Protector) ([]Info, error)
 			continue
 		}
 
-		info := Info{PID: pid}
+		info := Info{PID: pid, ParentPID: parents[pid]}
 		info.CreatedAt, _ = process.CreateTimeWithContext(ctx)
 		seenPIDs[pid] = struct{}{}
 
@@ -70,6 +73,13 @@ func ListWithProtector(ctx context.Context, protector Protector) ([]Info, error)
 		}
 		if commandLine, err := process.CmdlineWithContext(ctx); err == nil {
 			info.CommandLine = strings.TrimSpace(commandLine)
+		}
+		if directory, err := process.CwdWithContext(ctx); err == nil && strings.TrimSpace(directory) != "" {
+			info.WorkingDirectory = strings.TrimSpace(directory)
+		} else if err != nil {
+			info.WorkingDirectoryError = err.Error()
+		} else {
+			info.WorkingDirectoryError = "Working directory unavailable or access denied."
 		}
 		if user, err := process.UsernameWithContext(ctx); err == nil {
 			info.User = strings.TrimSpace(user)
@@ -92,4 +102,19 @@ func ListWithProtector(ctx context.Context, protector Protector) ([]Info, error)
 	}
 
 	return processes, nil
+}
+
+// Read the process tree once rather than taking a new system snapshot per PID.
+func parentProcessIDs() map[int32]int32 {
+	parents := make(map[int32]int32)
+	handle, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return parents
+	}
+	defer windows.CloseHandle(handle)
+	entry := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
+	for err := windows.Process32First(handle, &entry); err == nil; err = windows.Process32Next(handle, &entry) {
+		parents[int32(entry.ProcessID)] = int32(entry.ParentProcessID)
+	}
+	return parents
 }

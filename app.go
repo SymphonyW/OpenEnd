@@ -12,6 +12,7 @@ import (
 	processdetail "openend/internal/detail"
 	portscanner "openend/internal/port"
 	processscanner "openend/internal/process"
+	"openend/internal/project"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
@@ -44,7 +45,9 @@ type SystemResourceInfo struct {
 
 // App struct
 type App struct {
-	ctx context.Context
+	ctx              context.Context
+	projectMu        sync.Mutex
+	projectOverrides map[project.Identity]string
 }
 
 // NewApp creates a new App application struct
@@ -349,7 +352,7 @@ func (a *App) GetProcessList() ([]processscanner.Info, error) {
 		return nil, err
 	}
 
-	return processes, nil
+	return a.assignProjects(ctx, processes)
 }
 
 // GetProcessDetail returns a single process detail view with ports and recent logs.

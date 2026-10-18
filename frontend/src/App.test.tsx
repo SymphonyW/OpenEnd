@@ -21,6 +21,7 @@ const setCleanupRuleEnabledMock = vi.fn();
 const deleteCleanupRuleMock = vi.fn();
 const getOperationLogsMock = vi.fn();
 const getRecentOperationLogsForResourceMock = vi.fn();
+const setProcessProjectMock = vi.fn();
 
 vi.mock('../wailsjs/go/main/App', () => ({
     AddCleanupRule: (input: CleanupRuleInputFixture) => addCleanupRuleMock(input),
@@ -39,6 +40,7 @@ vi.mock('../wailsjs/go/main/App', () => ({
     KillProcessByPID: (pid: number, createdAt: number) => killProcessByPIDMock(pid, createdAt),
     KillProcessByPort: (port: number, protocol: string, pid: number, createdAt: number) => killProcessByPortMock(port, protocol, pid, createdAt),
     SetCleanupRuleEnabled: (id: string, enabled: boolean) => setCleanupRuleEnabledMock(id, enabled),
+    SetProcessProject: (pid: number, createdAt: number, path: string, remember: boolean, reset: boolean) => setProcessProjectMock(pid, createdAt, path, remember, reset),
 }));
 
 interface CleanupPortRangeFixture {
@@ -308,6 +310,8 @@ describe('App layout navigation', () => {
         getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo());
         getProcessListMock.mockReset();
         getProcessListMock.mockResolvedValue(processRows);
+        setProcessProjectMock.mockReset();
+        setProcessProjectMock.mockResolvedValue(undefined);
         getProcessDetailMock.mockReset();
         getProcessDetailMock.mockResolvedValue(nodeProcessDetail);
         getPortListMock.mockReset();
@@ -1075,6 +1079,7 @@ describe('App layout navigation', () => {
             'Memory',
             'Ports',
             'Protected',
+            'Project',
             'Path',
             'Command',
         ]);
@@ -1090,6 +1095,7 @@ describe('App layout navigation', () => {
             'CPU',
             'Memory',
             'Protected',
+            'Project',
             'Path',
             'Command',
         ]);
@@ -1109,6 +1115,59 @@ describe('App layout navigation', () => {
             'Reason',
             'Actions',
         ]);
+    });
+
+    it('groups both pages consistently and opens a project without retaining unrelated filters', async () => {
+        const projectPath = 'D:\\Projects\\Alpha';
+        getProcessListMock.mockResolvedValue(processRows.map(process => process.pid === 100
+            ? {...process, projectName: 'Alpha', projectPath, projectReason: 'directory'} : process));
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Ports'}));
+        await screen.findByRole('table', {name: 'Port list'});
+        fireEvent.change(screen.getByLabelText('Port'), {target: {value: '5432'}});
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        const processesTable = await screen.findByRole('table', {name: 'Process list'});
+        fireEvent.click(screen.getByRole('button', {name: 'By project'}));
+        const heading = within(processesTable).getByRole('button', {name: /Alpha/});
+        fireEvent.click(heading);
+        expect(within(processesTable).queryByText('node.exe')).not.toBeInTheDocument();
+        fireEvent.click(heading);
+        expect(within(processesTable).getByText('node.exe')).toBeInTheDocument();
+        fireEvent.click(within(heading.closest('tr')!).getByRole('button', {name: 'View project ports'}));
+        const portsTable = await screen.findByRole('table', {name: 'Port list'});
+        await waitFor(() => expect(within(portsTable).getByText('3000')).toBeInTheDocument());
+        expect(within(portsTable).queryByText('5432')).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Port')).toHaveValue('');
+        expect(screen.getByRole('combobox', {name: 'Project filter'})).toHaveValue('d:/projects/alpha');
+        expect(within(portsTable).getByRole('button', {name: /Alpha/}).closest('tr')).toHaveTextContent('1 processes · 512.0 MB');
+        fireEvent.click(screen.getByRole('button', {name: 'View project processes'}));
+        await screen.findByRole('table', {name: 'Process list'});
+        expect(screen.getByRole('combobox', {name: 'Project filter'})).toHaveValue('d:/projects/alpha');
+        expect(window.localStorage.getItem('openend-ports-project-view')).toBe('grouped');
+    });
+
+    it('updates assignment from a port detail and refreshes the process view when revisited', async () => {
+        const projectPath = 'D:\\Projects\\Beta';
+        let currentRows = processRows.map(process => ({...process, workingDirectory: 'D:\\Projects\\Alpha', projectName: 'Alpha', projectPath: 'D:\\Projects\\Alpha'}));
+        getProcessListMock.mockImplementation(async () => currentRows);
+        setProcessProjectMock.mockImplementation(async (pid: number, _createdAt: number, path: string) => {
+            currentRows = currentRows.map(process => process.pid === pid ? {...process, projectName: 'Beta', projectPath: path} : process);
+        });
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        await screen.findByRole('table', {name: 'Process list'});
+        fireEvent.click(screen.getByRole('button', {name: 'Ports'}));
+        const portsTable = await screen.findByRole('table', {name: 'Port list'});
+        fireEvent.click(within(portsTable).getByText('3000'));
+        const detail = screen.getByRole('complementary', {name: /Port detail/i});
+        fireEvent.click(within(detail).getByText('Change project assignment'));
+        fireEvent.change(within(detail).getByLabelText('Project directory'), {target: {value: projectPath}});
+        fireEvent.click(within(detail).getByRole('button', {name: 'Save assignment'}));
+        await waitFor(() => expect(setProcessProjectMock).toHaveBeenCalledWith(100, 1000, projectPath, false, false));
+        await waitFor(() => expect(within(portsTable).getByText('3000').closest('tr')).toHaveTextContent('Beta'));
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        const processesTable = await screen.findByRole('table', {name: 'Process list'});
+        await waitFor(() => expect(within(processesTable).getByText('node.exe').closest('tr')).toHaveTextContent('Beta'));
     });
 
     it('renders bottom horizontal scrollbars for process data tables', async () => {

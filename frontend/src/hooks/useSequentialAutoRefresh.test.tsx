@@ -170,6 +170,18 @@ describe('useSequentialAutoRefresh', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
+    it('refreshes after a project edit without overlapping an in-flight scan', async () => {
+        const pending = deferredRefresh();
+        const loader = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(undefined);
+        renderHook(() => useSequentialAutoRefresh(loader, 5000, 'projects-edited'));
+        act(() => { window.dispatchEvent(new Event('projects-edited')); });
+        expect(loader).toHaveBeenCalledTimes(1);
+        await act(async () => { pending.resolve(); });
+        expect(loader).toHaveBeenCalledTimes(2);
+        expect(loader).toHaveBeenLastCalledWith(false);
+        expect(vi.getTimerCount()).toBe(1);
+    });
+
     it('reports loader failures and continues polling without an unhandled rejection', async () => {
         const error = new Error('Scanner unavailable');
         const reportError = vi.spyOn(console, 'error').mockImplementation(() => {});

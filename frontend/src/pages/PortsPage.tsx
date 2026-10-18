@@ -4,6 +4,8 @@ import ProcessNameCell from '../components/ProcessNameCell';
 import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
 import RefreshControls from '../components/RefreshControls';
+import {ProjectAssignment, ProjectCell, ProjectGroupRow, ProjectToolbar} from '../components/ProjectGrouping';
+import {buildProjectGroups, matchingOwner, projectKey, projectRows, projectsChangedEvent, useProjectView} from '../services/projects';
 import {operationText, operationVariant, type OperationVariant} from '../services/operations';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {loadRecentOperationLogsForResource} from '../services/logs';
@@ -30,6 +32,7 @@ interface PortContextMenu {
 }
 
 function PortsPage({page, t}: PortsPageProps) {
+    const projectView = useProjectView('ports');
     const [ports, setPorts] = useState<PortInfo[]>([]);
     const [processes, setProcesses] = useState<ProcessInfo[]>([]);
     const [portSearch, setPortSearch] = useState('');
@@ -48,6 +51,12 @@ function PortsPage({page, t}: PortsPageProps) {
     const [operationLogs, setOperationLogs] = useState<OperationLog[]>([]);
     const [logsErrorMessage, setLogsErrorMessage] = useState('');
     const [contextMenu, setContextMenu] = useState<PortContextMenu | null>(null);
+
+    useEffect(() => {
+        if (projectView.navigationSequence > 0) {
+            setPortSearch(''); setProcessSearch(''); setProtocolFilter('all'); setStatusFilter('all');
+        }
+    }, [projectView.navigationSequence]);
 
     const loadPorts = useCallback(async (showLoading = true) => {
         if (showLoading) {
@@ -71,7 +80,7 @@ function PortsPage({page, t}: PortsPageProps) {
         }
     }, [t, relatedUpdated]);
 
-    useSequentialAutoRefresh(loadPorts, portRefreshIntervalMs);
+    useSequentialAutoRefresh(loadPorts, portRefreshIntervalMs, projectsChangedEvent);
 
     const loadRelatedLogs = useCallback(async (port: PortInfo) => {
         setLogsErrorMessage('');
@@ -208,30 +217,37 @@ function PortsPage({page, t}: PortsPageProps) {
         return Array.from(new Set(ports.map((port) => port.status).filter(Boolean))).sort();
     }, [ports]);
 
+    const processesByPID = useMemo(() => groupProcessesByPID(processes), [processes]);
     const visiblePorts = useMemo(() => {
         const normalizedPortSearch = portSearch.trim();
         const normalizedProcessSearch = processSearch.trim().toLowerCase();
 
         return ports.filter((port) => {
+            const owner = matchingOwner(port, processesByPID);
             const matchesPort = normalizedPortSearch === ''
                 || port.port.toString().includes(normalizedPortSearch);
             const matchesProcess = normalizedProcessSearch === ''
-                || port.processName.toLowerCase().includes(normalizedProcessSearch);
+                || port.processName.toLowerCase().includes(normalizedProcessSearch)
+                || (owner?.projectPath || '').toLowerCase().includes(normalizedProcessSearch);
             const matchesProtocol = protocolFilter === 'all' || port.protocol === protocolFilter;
             const matchesStatus = statusFilter === 'all' || port.status === statusFilter;
 
-            return matchesPort && matchesProcess && matchesProtocol && matchesStatus;
+            return matchesPort && matchesProcess && matchesProtocol && matchesStatus
+                && (projectView.filter === '*' || projectKey(owner?.projectPath) === projectView.filter);
         });
-    }, [portSearch, ports, processSearch, protocolFilter, statusFilter]);
+    }, [portSearch, ports, processSearch, protocolFilter, statusFilter, processesByPID, projectView.filter]);
+
+    const projectGroups = useMemo(() => buildProjectGroups(visiblePorts, port => matchingOwner(port, processesByPID), visiblePorts), [visiblePorts, processesByPID]);
+    const rows = projectRows(projectGroups, visiblePorts, projectView);
 
     const isFiltered = portSearch.trim() !== ''
         || processSearch.trim() !== ''
         || protocolFilter !== 'all'
-        || statusFilter !== 'all';
+        || statusFilter !== 'all'
+        || projectView.filter !== '*';
     const emptyMessage = isFiltered ? t('ports.emptyFiltered') : t('ports.empty');
-    const processesByPID = useMemo(() => groupProcessesByPID(processes), [processes]);
     const selectedProcess = selectedPort ? processesByPID.get(selectedPort.pid) : undefined;
-    const selectedOwner = selectedProcess?.createdAt === selectedPort?.createdAt ? selectedProcess : undefined;
+    const selectedOwner = selectedPort && selectedPort.createdAt > 0 && selectedProcess?.createdAt === selectedPort.createdAt ? selectedProcess : undefined;
     const relatedLogs = useMemo(() => {
         if (!selectedPort) {
             return [];
@@ -243,6 +259,7 @@ function PortsPage({page, t}: PortsPageProps) {
     return (
         <section className="page-panel process-page" aria-label={page.title}>
             <RefreshControls t={t} updatedAt={lastUpdated}/>
+            <ProjectToolbar view={projectView} processes={processes} t={t}/>
             <div className="resource-toolbar port-toolbar">
                 <label className="filter-field compact-filter">
                     <span>{t('filter.port')}</span>
@@ -303,7 +320,7 @@ function PortsPage({page, t}: PortsPageProps) {
                 <StatusMessage variant="empty">{emptyMessage}</StatusMessage>
             )}
 
-            {visiblePorts.length > 0 && (
+            {(visiblePorts.length > 0 || selectedPort !== null) && (
                 <div className={selectedPort ? 'process-detail-layout has-detail' : 'process-detail-layout'}>
                     <ScrollableDataTable
                         className="compact-table-wrap"
@@ -320,17 +337,19 @@ function PortsPage({page, t}: PortsPageProps) {
                                     <th className="metric-heading">{t('field.cpu')}</th>
                                     <th className="metric-heading">{t('field.memory')}</th>
                                     <th>{t('field.protected')}</th>
+                                    <th>{t('projects.project')}</th>
                                     <th>{t('field.path')}</th>
                                     <th>{t('field.command')}</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {visiblePorts.map((port) => {
+                                {rows.map(entry => {
+                                    if ('group' in entry) return <ProjectGroupRow key={`group:${entry.group.key}`} group={entry.group} view={projectView} columns={11} destination="processes" t={t}/>;
+                                    const port = entry.row;
                                     const isDevPort = isCommonDevelopmentPort(port.port);
                                     const isSelected = (selectedPort ? samePort(selectedPort, port) : false)
                                         || (contextMenu ? samePort(contextMenu.port, port) : false);
-                                    const candidateOwner = processesByPID.get(port.pid);
-                                    const owner = candidateOwner?.createdAt === port.createdAt ? candidateOwner : undefined;
+                                    const owner = matchingOwner(port, processesByPID);
                                     const processName = owner?.name || port.processName || t('common.unknown');
                                     const processPath = owner?.path || port.processPath || t('common.unavailable');
                                     const commandLine = owner?.commandLine || t('common.unavailable');
@@ -368,6 +387,7 @@ function PortsPage({page, t}: PortsPageProps) {
                                                     {isProtected ? t('badge.protected') : t('badge.standard')}
                                                 </span>
                                             </td>
+                                            <td><ProjectCell process={owner} t={t}/></td>
                                             <td className="muted-cell compact-path-cell" title={processPath}>
                                                 {processPath}
                                             </td>
@@ -414,6 +434,7 @@ function PortsPage({page, t}: PortsPageProps) {
                         </div>
 
                         <div className="detail-drawer-body">
+                            {selectedOwner && <ProjectAssignment key={`${selectedOwner.pid}:${selectedOwner.createdAt}`} process={selectedOwner} processes={processes} t={t}/>}
                             <div className="detail-badge-row">
                                 <span className={selectedPort.isProtected ? 'protected-badge' : 'standard-badge'}>
                                     {selectedPort.isProtected ? t('badge.protected') : t('badge.standard')}

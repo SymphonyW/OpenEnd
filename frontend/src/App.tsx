@@ -11,10 +11,13 @@ import {
 } from './services/i18n';
 import {defaultPageId, getPageById, getPages} from './services/pages';
 import type {PageId} from './types/navigation';
+import {ProjectNavigationContext} from './services/projects';
+import type {ProjectPage} from './services/projects';
 
 function App() {
     const [activePageId, setActivePageId] = useState<PageId>(defaultPageId);
     const [visitedPages, setVisitedPages] = useState<PageId[]>([defaultPageId]);
+    const [projectTarget, setProjectTarget] = useState<{page: ProjectPage; path: string; sequence: number} | null>(null);
     const selectPage = (id: PageId) => {
         setVisitedPages(current => current.includes(id) ? current : [...current, id]);
         setActivePageId(id);
@@ -47,6 +50,10 @@ function App() {
                 <header className="workspace-header">
                     <h1>{activePage.label}</h1>
                 </header>
+                <ProjectNavigationContext.Provider value={{target: projectTarget, navigate: (page, path) => {
+                    setProjectTarget(current => ({page, path, sequence: (current?.sequence ?? 0) + 1}));
+                    selectPage(page);
+                }}}>
                 {visitedPages.map(id => (
                     <div className="workspace-body" key={id} hidden={id !== activePageId}>
                         <PageActivityContext.Provider value={id === activePageId}>
@@ -54,6 +61,7 @@ function App() {
                         </PageActivityContext.Provider>
                     </div>
                 ))}
+                </ProjectNavigationContext.Provider>
             </main>
         </div>
     );
