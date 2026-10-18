@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {buildProjectGroups, matchingOwner, projectKey} from './projects';
+import {buildProjectGroups, matchingOwner, ownershipOf, projectKey} from './projects';
 import type {ProcessInfo} from '../types/processes';
 import type {PortInfo} from '../types/ports';
 
@@ -27,5 +27,21 @@ describe('shared project views', () => {
         expect(unknown.key).toBe('');
         expect(unknown.hasUnknownOwners).toBe(true);
         expect(projectKey('D:\\Projects\\APP')).toBe(projectKey('d:/projects/app/'));
+    });
+
+    it('keeps application identities separate from projects and deduplicates application port totals', () => {
+        const appPath = 'C:\\Apps\\Chrome\\chrome.exe';
+        const app = {...owner, projectPath: '', projectName: '', applicationPath: appPath, applicationName: 'Google Chrome', applicationReason: 'applicationPath'};
+        const otherInstall = {...app, pid: 11, applicationPath: 'D:\\Apps\\Chrome\\chrome.exe'};
+        const project = {...owner, pid: 12, projectPath: appPath, projectName: 'Google Chrome'};
+        const groups = buildProjectGroups([app, otherInstall, project], row => row, []);
+        expect(groups).toHaveLength(3);
+        expect(groups.filter(group => group.kind === 'application')).toHaveLength(2);
+        expect(ownershipOf({...app, projectPath: 'D:\\work'}).kind).toBe('project');
+        const ports = [port, {...port, port: 8080}];
+        const portGroups = buildProjectGroups(ports, row => matchingOwner(row, new Map([[app.pid, app]])), ports);
+        expect(portGroups[0].key).toBe('app:c:/apps/chrome/chrome.exe');
+        expect(portGroups[0].memoryBytes).toBe(app.memoryBytes);
+        expect(portGroups[0].kind).toBe('application');
     });
 });

@@ -13,6 +13,20 @@ export function projectKey(path = ''): string {
     return path.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
 }
 
+export type OwnershipKind = 'project' | 'application' | 'unknown';
+
+export function ownershipOf(process?: ProcessInfo): {key: string; kind: OwnershipKind; path: string; name: string; reason: string} {
+    if (process?.projectPath) {
+        return {key: projectKey(process.projectPath), kind: 'project', path: process.projectPath,
+            name: process.projectName || process.projectPath.split(/[\\/]/).pop() || '', reason: process.projectReason || ''};
+    }
+    if (process?.applicationPath) {
+        return {key: `app:${projectKey(process.applicationPath)}`, kind: 'application', path: process.applicationPath,
+            name: process.applicationName || process.applicationPath.split(/[\\/]/).pop() || '', reason: process.applicationReason || ''};
+    }
+    return {key: '', kind: 'unknown', path: '', name: '', reason: process?.projectReason || ''};
+}
+
 export function matchingOwner(port: PortInfo, owners: Map<number, ProcessInfo>): ProcessInfo | undefined {
     const owner = owners.get(port.pid);
     return port.createdAt > 0 && owner?.createdAt === port.createdAt ? owner : undefined;
@@ -49,6 +63,7 @@ export interface ProjectGroup<T> {
     key: string;
     path: string;
     name: string;
+    kind: OwnershipKind;
     rows: T[];
     processCount: number;
     memoryBytes: number;
@@ -68,11 +83,11 @@ export function buildProjectGroups<T>(rows: T[], ownerOf: (row: T) => ProcessInf
     const groups = new Map<string, {group: ProjectGroup<T>; owners: Map<string, ProcessInfo>}>();
     for (const row of rows) {
         const owner = ownerOf(row);
-        const path = owner?.projectPath ?? '';
-        const key = projectKey(path);
+        const ownership = ownershipOf(owner);
+        const {key} = ownership;
         let entry = groups.get(key);
         if (!entry) {
-            entry = {group: {key, path, name: owner?.projectName || path.split(/[\\/]/).pop() || '', rows: [], processCount: 0, memoryBytes: 0, hasUnknownOwners: false, ports: []}, owners: new Map()};
+            entry = {group: {...ownership, rows: [], processCount: 0, memoryBytes: 0, hasUnknownOwners: false, ports: []}, owners: new Map()};
             groups.set(key, entry);
         }
         entry.group.rows.push(row);

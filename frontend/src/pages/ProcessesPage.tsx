@@ -5,7 +5,7 @@ import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
 import RefreshControls from '../components/RefreshControls';
 import {ProjectAssignment, ProjectCell, ProjectGroupRow, ProjectToolbar} from '../components/ProjectGrouping';
-import {buildProjectGroups, projectKey, projectRows, projectsChangedEvent, useProjectView} from '../services/projects';
+import {buildProjectGroups, ownershipOf, projectRows, projectsChangedEvent, useProjectView} from '../services/projects';
 import {operationText, operationVariant, type OperationVariant} from '../services/operations';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {formatMemorySize, formatPercent, isHighMemoryUsage} from '../services/systemResources';
@@ -248,11 +248,12 @@ function ProcessesPage({page, t}: ProcessesPageProps) {
             .filter((process) => {
                 const matchesName = normalizedNameSearch === ''
                     || process.name.toLowerCase().includes(normalizedNameSearch)
-                    || (process.projectPath || '').toLowerCase().includes(normalizedNameSearch);
+                    || ownershipOf(process).name.toLowerCase().includes(normalizedNameSearch)
+                    || ownershipOf(process).path.toLowerCase().includes(normalizedNameSearch);
                 const matchesPid = normalizedPidSearch === ''
                     || process.pid.toString().includes(normalizedPidSearch);
 
-                return matchesName && matchesPid && (projectView.filter === '*' || projectKey(process.projectPath) === projectView.filter);
+                return matchesName && matchesPid && (projectView.filter === '*' || ownershipOf(process).key === projectView.filter);
             })
             .sort((left, right) => {
                 if (sortKey === 'cpu') {

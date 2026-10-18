@@ -9,6 +9,9 @@ type Info struct {
 	ProjectName           string  `json:"projectName"`
 	ProjectReason         string  `json:"projectReason"`
 	ProjectRuleSource     string  `json:"projectRuleSource"`
+	ApplicationPath       string  `json:"applicationPath"`
+	ApplicationName       string  `json:"applicationName"`
+	ApplicationReason     string  `json:"applicationReason"`
 	CreatedAt             int64   `json:"createdAt"`
 	PID                   int32   `json:"pid"`
 	Name                  string  `json:"name"`

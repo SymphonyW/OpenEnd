@@ -8,6 +8,9 @@ export interface ProcessInfo {
 	projectName?: string;
 	projectReason?: string;
 	projectRuleSource?: string;
+    applicationPath?: string;
+    applicationName?: string;
+    applicationReason?: string;
     pid: number;
     createdAt: number;
     name: string;

@@ -1079,7 +1079,7 @@ describe('App layout navigation', () => {
             'Memory',
             'Ports',
             'Protected',
-            'Project',
+            'App / project',
             'Path',
             'Command',
         ]);
@@ -1095,7 +1095,7 @@ describe('App layout navigation', () => {
             'CPU',
             'Memory',
             'Protected',
-            'Project',
+            'App / project',
             'Path',
             'Command',
         ]);
@@ -1127,23 +1127,72 @@ describe('App layout navigation', () => {
         fireEvent.change(screen.getByLabelText('Port'), {target: {value: '5432'}});
         fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
         const processesTable = await screen.findByRole('table', {name: 'Process list'});
-        fireEvent.click(screen.getByRole('button', {name: 'By project'}));
+        fireEvent.click(screen.getByRole('button', {name: 'Apps & projects'}));
         const heading = within(processesTable).getByRole('button', {name: /Alpha/});
         fireEvent.click(heading);
         expect(within(processesTable).queryByText('node.exe')).not.toBeInTheDocument();
         fireEvent.click(heading);
         expect(within(processesTable).getByText('node.exe')).toBeInTheDocument();
-        fireEvent.click(within(heading.closest('tr')!).getByRole('button', {name: 'View project ports'}));
+        fireEvent.click(within(heading.closest('tr')!).getByRole('button', {name: 'View ports'}));
         const portsTable = await screen.findByRole('table', {name: 'Port list'});
         await waitFor(() => expect(within(portsTable).getByText('3000')).toBeInTheDocument());
         expect(within(portsTable).queryByText('5432')).not.toBeInTheDocument();
         expect(screen.getByLabelText('Port')).toHaveValue('');
-        expect(screen.getByRole('combobox', {name: 'Project filter'})).toHaveValue('d:/projects/alpha');
+        expect(screen.getByRole('combobox', {name: 'App or project filter'})).toHaveValue('d:/projects/alpha');
         expect(within(portsTable).getByRole('button', {name: /Alpha/}).closest('tr')).toHaveTextContent('1 processes · 512.0 MB');
-        fireEvent.click(screen.getByRole('button', {name: 'View project processes'}));
+        fireEvent.click(screen.getByRole('button', {name: 'View processes'}));
         await screen.findByRole('table', {name: 'Process list'});
-        expect(screen.getByRole('combobox', {name: 'Project filter'})).toHaveValue('d:/projects/alpha');
+        expect(screen.getByRole('combobox', {name: 'App or project filter'})).toHaveValue('d:/projects/alpha');
         expect(window.localStorage.getItem('openend-ports-project-view')).toBe('grouped');
+    });
+
+    it('shows app and project groups together and filters app ports using the same executable identity', async () => {
+        const appPath = 'C:\\Apps\\Browser\\chrome.exe';
+        getProcessListMock.mockResolvedValue(processRows.map(process => {
+            if (process.pid === 600) return {...process, applicationName: 'Google Chrome', applicationPath: appPath, applicationReason: 'applicationPath'};
+            if (process.pid === 100) return {...process, projectName: 'Alpha', projectPath: 'D:\\Projects\\Alpha'};
+            return process;
+        }));
+        getPortListMock.mockResolvedValue([...portRows, {...portRows[0], pid: 600, port: 9222, processName: 'chrome.exe'}]);
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        const processTable = await screen.findByRole('table', {name: 'Process list'});
+        fireEvent.click(screen.getByRole('button', {name: 'Apps & projects'}));
+        const appHeading = within(processTable).getByRole('button', {name: /Google Chrome/});
+        expect(appHeading).toHaveTextContent('App');
+        expect(within(processTable).getByRole('button', {name: /Alpha/})).toHaveTextContent('Project');
+        fireEvent.click(within(appHeading.closest('tr')!).getByRole('button', {name: 'View ports'}));
+        const portsTable = await screen.findByRole('table', {name: 'Port list'});
+        await waitFor(() => expect(within(portsTable).getByText('9222')).toBeInTheDocument());
+        expect(within(portsTable).queryByText('3000')).not.toBeInTheDocument();
+        expect(screen.getByRole('combobox', {name: 'App or project filter'})).toHaveValue('app:c:/apps/browser/chrome.exe');
+        expect(within(portsTable).getByRole('button', {name: /Google Chrome/})).toHaveTextContent('App');
+        fireEvent.click(screen.getByRole('button', {name: 'View processes'}));
+        const filteredProcesses = await screen.findByRole('table', {name: 'Process list'});
+        expect(within(filteredProcesses).getByText('chrome.exe', {selector: '.process-name-text'})).toBeInTheDocument();
+        expect(within(filteredProcesses).queryByText('node.exe')).not.toBeInTheDocument();
+    });
+
+    it('can exclude an app process and restore its automatic application assignment', async () => {
+        const app = {...processRows[4], applicationName: 'Google Chrome', applicationPath: processRows[4].path, applicationReason: 'applicationPath', projectReason: ''};
+        let currentRows = [app];
+        getProcessListMock.mockImplementation(async () => currentRows);
+        getProcessDetailMock.mockResolvedValue({...nodeProcessDetail, pid: app.pid, processName: app.name});
+        setProcessProjectMock.mockImplementation(async (_pid: number, _createdAt: number, _path: string, _remember: boolean, reset: boolean) => {
+            currentRows = [reset ? app : {...app, applicationName: '', applicationPath: '', applicationReason: '', projectReason: 'manual'}];
+        });
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        const table = await screen.findByRole('table', {name: 'Process list'});
+        fireEvent.click(within(table).getByText('chrome.exe', {selector: '.process-name-text'}));
+        const detail = await screen.findByRole('complementary', {name: 'Process detail'});
+        fireEvent.click(await within(detail).findByText('Change assignment'));
+        fireEvent.click(within(detail).getByRole('button', {name: 'Remove from group'}));
+        await waitFor(() => expect(within(table).getByText('Unidentified')).toBeInTheDocument());
+        expect(setProcessProjectMock).toHaveBeenCalledWith(app.pid, app.createdAt, '', false, false);
+        fireEvent.click(within(detail).getByRole('button', {name: 'Restore automatic assignment'}));
+        await waitFor(() => expect(within(table).getByText('Google Chrome')).toBeInTheDocument());
+        expect(setProcessProjectMock).toHaveBeenLastCalledWith(app.pid, app.createdAt, '', false, true);
     });
 
     it('updates assignment from a port detail and refreshes the process view when revisited', async () => {
@@ -1160,7 +1209,7 @@ describe('App layout navigation', () => {
         const portsTable = await screen.findByRole('table', {name: 'Port list'});
         fireEvent.click(within(portsTable).getByText('3000'));
         const detail = screen.getByRole('complementary', {name: /Port detail/i});
-        fireEvent.click(within(detail).getByText('Change project assignment'));
+        fireEvent.click(within(detail).getByText('Change assignment'));
         fireEvent.change(within(detail).getByLabelText('Project directory'), {target: {value: projectPath}});
         fireEvent.click(within(detail).getByRole('button', {name: 'Save assignment'}));
         await waitFor(() => expect(setProcessProjectMock).toHaveBeenCalledWith(100, 1000, projectPath, false, false));

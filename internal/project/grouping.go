@@ -1,4 +1,4 @@
-// Package project resolves project ownership once for both process and port views.
+// Package project resolves application and project ownership for both resource views.
 package project
 
 import (
@@ -32,11 +32,13 @@ func Assign(processes []process.Info, rules []config.ProjectRule, overrides map[
 	rules = append([]config.ProjectRule(nil), rules...)
 	sort.SliceStable(rules, func(i, j int) bool { return len(rules[i].SourcePath) > len(rules[j].SourcePath) })
 	byPID := make(map[int32]int, len(processes))
+	for i := range processes {
+		byPID[processes[i].PID] = i
+	}
 	resolved := make(map[int32]bool, len(processes))
 	for i := range processes {
 		p := &processes[i]
 		p.ProjectPath, p.ProjectName, p.ProjectReason, p.ProjectRuleSource = "", "", "", ""
-		byPID[p.PID] = i
 		for _, rule := range rules {
 			if Contains(rule.SourcePath, p.WorkingDirectory) {
 				setProject(p, rule.ProjectPath, "rule")
@@ -50,7 +52,7 @@ func Assign(processes []process.Info, rules []config.ProjectRule, overrides map[
 			resolved[p.PID] = true
 			continue
 		}
-		if resolved[p.PID] || sharedHost(p.Name) || p.IsProtected {
+		if resolved[p.PID] || sharedHost(p.Name) || bundledHelper(*p, processes, byPID) {
 			resolved[p.PID] = true
 			continue
 		}
@@ -62,7 +64,7 @@ func Assign(processes []process.Info, rules []config.ProjectRule, overrides map[
 				arg = value
 			}
 			if filepath.IsAbs(arg) {
-				if root := rootFor(arg); root != "" {
+				if root := rootFor(arg); root != "" && (developmentRuntime(p.Name) || Contains(root, p.Path)) {
 					candidates[strings.ToLower(root)] = root
 				}
 			}
@@ -76,7 +78,7 @@ func Assign(processes []process.Info, rules []config.ProjectRule, overrides map[
 			setProject(p, root, "command")
 		}
 		if p.ProjectPath == "" {
-			if root := rootFor(p.WorkingDirectory); root != "" {
+			if root := rootFor(p.WorkingDirectory); root != "" && (developmentRuntime(p.Name) || Contains(root, p.Path)) {
 				setProject(p, root, "directory")
 			}
 		}
@@ -109,6 +111,7 @@ func Assign(processes []process.Info, rules []config.ProjectRule, overrides map[
 	for i := range processes {
 		inherit(i)
 	}
+	assignApplications(processes, byPID)
 }
 
 func setProject(p *process.Info, path, reason string) {
@@ -168,9 +171,6 @@ func dependencyPath(path string) bool {
 }
 
 func sharedHost(name string) bool {
-	switch strings.ToLower(strings.TrimSuffix(strings.ToLower(name), ".exe")) {
-	case "code", "code - insiders", "codex", "cursor", "devenv", "idea64", "pycharm64", "webstorm64", "rider64", "chrome", "msedge", "firefox", "explorer", "windowsterminal", "cmd", "powershell", "pwsh", "conhost", "docker", "docker desktop", "wsl", "wslhost":
-		return true
-	}
-	return false
+	_, known := applicationNames[executableStem(name)]
+	return known || applicationBoundary(name)
 }

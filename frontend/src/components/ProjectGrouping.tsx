@@ -1,13 +1,13 @@
 import {useContext, useEffect, useState} from 'react';
 import {SetProcessProject} from '../../wailsjs/go/main/App';
-import {ProjectNavigationContext, projectKey, projectsChangedEvent} from '../services/projects';
+import {ProjectNavigationContext, ownershipOf, projectsChangedEvent} from '../services/projects';
 import type {ProjectGroup, ProjectPage, ProjectView} from '../services/projects';
 import type {ProcessInfo} from '../types/processes';
 import type {Translator, TranslationKey} from '../services/i18n';
 import {formatMemorySize} from '../services/systemResources';
 
 export function ProjectToolbar({view, processes, t}: {view: ProjectView; processes: ProcessInfo[]; t: Translator}) {
-    const projects = new Map(processes.filter(p => p.projectPath).map(p => [projectKey(p.projectPath), p]));
+    const groups = new Map(processes.map(ownershipOf).filter(group => group.key).map(group => [group.key, group]));
     return <div className="project-toolbar">
         <div className="sort-controls" role="group" aria-label={t('projects.view')}>
             <button className={`sort-button${!view.grouped ? ' active' : ''}`} aria-pressed={!view.grouped} onClick={() => view.setGrouped(false)}>{t('projects.all')}</button>
@@ -17,8 +17,8 @@ export function ProjectToolbar({view, processes, t}: {view: ProjectView; process
             <select aria-label={t('projects.filter')} value={view.filter} onChange={event => view.setFilter(event.target.value)}>
                 <option value="*">{t('projects.allProjects')}</option>
                 <option value="">{t('projects.ungrouped')}</option>
-                {[...projects].sort(([a], [b]) => a.localeCompare(b)).map(([key, p]) => <option key={key} value={key}>{p.projectName} · {p.projectPath}</option>)}
-                {view.filter !== '*' && view.filter !== '' && !projects.has(view.filter) && <option value={view.filter}>{view.filter}</option>}
+                {[...groups].sort(([, a], [, b]) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path)).map(([key, group]) => <option key={key} value={key}>{group.name} · {t(group.kind === 'application' ? 'projects.kindApplication' : 'projects.kindProject')} · {group.path}</option>)}
+                {view.filter !== '*' && view.filter !== '' && !groups.has(view.filter) && <option value={view.filter}>{view.filter}</option>}
             </select>
         </label>
         {view.grouped && <span className="project-hint">{t('projects.filteredSummary')}</span>}
@@ -33,24 +33,28 @@ export function ProjectGroupRow<T>({group, view, columns, destination, t}: {grou
             <button className="project-group-toggle" aria-expanded={open} onClick={() => view.toggle(group.key)} title={group.path}>
                 <span aria-hidden="true">{open ? '▾' : '▸'}</span>
                 <strong>{group.name || t('projects.ungrouped')}</strong>
+                {group.kind !== 'unknown' && <span className={`ownership-kind ${group.kind}`}>{t(group.kind === 'application' ? 'projects.kindApplication' : 'projects.kindProject')}</span>}
                 {group.path && <span className="project-group-path">{group.path}</span>}
             </button>
             <span className="project-group-metrics">{group.processCount} {t(group.hasUnknownOwners ? 'projects.knownProcesses' : 'projects.processes')} · {group.hasUnknownOwners ? t('common.unavailable') : formatMemorySize(group.memoryBytes)} · {t('projects.servicePorts')}: {group.ports.join(', ') || (group.hasUnknownOwners ? t('common.unavailable') : t('common.none'))}</span>
-            {group.path && <button className="project-link" onClick={() => navigate(destination, group.path)}>{t(destination === 'ports' ? 'projects.viewPorts' : 'projects.viewProcesses')}</button>}
+            {group.path && <button className="project-link" onClick={() => navigate(destination, group.key)}>{t(destination === 'ports' ? 'projects.viewPorts' : 'projects.viewProcesses')}</button>}
         </div>
     </td></tr>;
 }
 
 export function ProjectCell({process, t}: {process?: ProcessInfo; t: Translator}) {
-    return <span title={process?.projectPath}>{process?.projectName || t('projects.ungrouped')}</span>;
+    const ownership = ownershipOf(process);
+    return <span title={ownership.path}>{ownership.name || t('projects.ungrouped')}</span>;
 }
 
 const reasons: Record<string, TranslationKey> = {
     manual: 'projects.reasonManual', rule: 'projects.reasonRule', command: 'projects.reasonCommand',
     directory: 'projects.reasonDirectory', parent: 'projects.reasonParent', conflict: 'projects.reasonConflict',
+    applicationPath: 'projects.reasonApplicationPath', applicationParent: 'projects.reasonApplicationParent',
 };
 
 export function ProjectAssignment({process, processes, t}: {process: ProcessInfo; processes: ProcessInfo[]; t: Translator}) {
+    const ownership = ownershipOf(process);
     const [path, setPath] = useState(process.projectPath || '');
     const [remember, setRemember] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -70,8 +74,17 @@ export function ProjectAssignment({process, processes, t}: {process: ProcessInfo
     const projectPaths = [...new Set(processes.map(p => p.projectPath).filter((p): p is string => !!p))];
     return <div className="project-assignment detail-section">
         <dl className="detail-field-list">
-            <div><dt>{t('projects.project')}</dt><dd>{process.projectPath || t('projects.ungrouped')}</dd></div>
-            <div><dt>{t('projects.reason')}</dt><dd>{t(reasons[process.projectReason || ''] || 'projects.reasonUnknown')}</dd></div>
+            <div>
+                <dt>{t('projects.project')}</dt>
+                <dd>
+                    {ownership.name || t('projects.ungrouped')}
+                    {ownership.kind !== 'unknown' && <span className={`ownership-kind ${ownership.kind}`}>
+                        {t(ownership.kind === 'application' ? 'projects.kindApplication' : 'projects.kindProject')}
+                    </span>}
+                    {ownership.path && <div>{ownership.path}</div>}
+                </dd>
+            </div>
+            <div><dt>{t('projects.reason')}</dt><dd>{t(reasons[ownership.reason] || 'projects.reasonUnknown')}</dd></div>
             <div><dt>{t('projects.directory')}</dt><dd>{process.workingDirectory || t('projects.directoryUnavailable')}</dd></div>
         </dl>
         <details><summary>{t('projects.edit')}</summary>

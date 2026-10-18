@@ -5,7 +5,7 @@ import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
 import RefreshControls from '../components/RefreshControls';
 import {ProjectAssignment, ProjectCell, ProjectGroupRow, ProjectToolbar} from '../components/ProjectGrouping';
-import {buildProjectGroups, matchingOwner, projectKey, projectRows, projectsChangedEvent, useProjectView} from '../services/projects';
+import {buildProjectGroups, matchingOwner, ownershipOf, projectRows, projectsChangedEvent, useProjectView} from '../services/projects';
 import {operationText, operationVariant, type OperationVariant} from '../services/operations';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {loadRecentOperationLogsForResource} from '../services/logs';
@@ -228,12 +228,13 @@ function PortsPage({page, t}: PortsPageProps) {
                 || port.port.toString().includes(normalizedPortSearch);
             const matchesProcess = normalizedProcessSearch === ''
                 || port.processName.toLowerCase().includes(normalizedProcessSearch)
-                || (owner?.projectPath || '').toLowerCase().includes(normalizedProcessSearch);
+                || ownershipOf(owner).name.toLowerCase().includes(normalizedProcessSearch)
+                || ownershipOf(owner).path.toLowerCase().includes(normalizedProcessSearch);
             const matchesProtocol = protocolFilter === 'all' || port.protocol === protocolFilter;
             const matchesStatus = statusFilter === 'all' || port.status === statusFilter;
 
             return matchesPort && matchesProcess && matchesProtocol && matchesStatus
-                && (projectView.filter === '*' || projectKey(owner?.projectPath) === projectView.filter);
+                && (projectView.filter === '*' || ownershipOf(owner).key === projectView.filter);
         });
     }, [portSearch, ports, processSearch, protocolFilter, statusFilter, processesByPID, projectView.filter]);
 

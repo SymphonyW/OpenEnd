@@ -348,6 +348,9 @@ export namespace process {
 	    projectName: string;
 	    projectReason: string;
 	    projectRuleSource: string;
+	    applicationPath: string;
+	    applicationName: string;
+	    applicationReason: string;
 	    createdAt: number;
 	    pid: number;
 	    name: string;
@@ -372,6 +375,9 @@ export namespace process {
 	        this.projectName = source["projectName"];
 	        this.projectReason = source["projectReason"];
 	        this.projectRuleSource = source["projectRuleSource"];
+	        this.applicationPath = source["applicationPath"];
+	        this.applicationName = source["applicationName"];
+	        this.applicationReason = source["applicationReason"];
 	        this.createdAt = source["createdAt"];
 	        this.pid = source["pid"];
 	        this.name = source["name"];

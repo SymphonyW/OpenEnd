@@ -32,14 +32,14 @@ OpenEnd 是一个面向开发者的 Windows 桌面资源管理工具，用于快
 | --- | --- |
 | Dashboard | 查看 CPU、内存、进程、端口和 GPU 相关资源数据 |
 | Processes | 查看进程、资源占用、可执行文件路径、启动命令和进程详情 |
-| Projects | 在进程页和端口页按项目分组，汇总资源和端口，支持同步手动修正归属 |
+| Apps & Projects | 在进程页和端口页按应用与项目分组，汇总资源和端口，支持同步手动修正归属 |
 | Ports | 查看 TCP/UDP 端口占用，并映射到对应进程 |
 | Cleanup | 识别并检查开发相关进程，辅助清理本地开发环境 |
 | Safety | 默认保护关键 Windows 系统进程，避免误结束 |
 | Logs | 记录进程和清理操作，便于回溯 |
 | Settings | 配置应用行为和受保护进程规则 |
 
-项目识别规则、手动修正方式和验证步骤见 [按项目查看进程和端口](docs/project-grouping.zh-CN.md)。
+归属识别规则、手动修正方式和验证步骤见 [应用与项目](docs/project-grouping.zh-CN.md)。
 
 ## 下载
 
