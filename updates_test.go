@@ -20,6 +20,7 @@ func TestCheckLatestRelease(t *testing.T) {
 	const tag = "v2.10.0"
 	const name = "OpenEnd-" + tag + "-windows-amd64-installer.exe"
 	const download = "https://github.com/SymphonyW/OpenEnd/releases/download/" + tag + "/" + name
+	const notes = "## Changes\n- Improved startup\n- 修复进程分组"
 	for _, tc := range []struct {
 		name       string
 		current    string
@@ -76,7 +77,7 @@ func TestCheckLatestRelease(t *testing.T) {
 					assets = append(assets, map[string]string{"name": assetName, "state": "uploaded", "browser_download_url": assetURL})
 				}
 				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"tag_name": releaseTag, "draft": tc.draft, "prerelease": tc.prerelease, "assets": assets,
+					"tag_name": releaseTag, "draft": tc.draft, "prerelease": tc.prerelease, "assets": assets, "body": "\n" + notes + "\n",
 				})
 			}))
 			defer server.Close()
@@ -89,6 +90,9 @@ func TestCheckLatestRelease(t *testing.T) {
 			}
 			if tc.available && (info.DownloadURL == "" || !strings.HasSuffix(info.DownloadURL, "-installer.exe")) {
 				t.Fatalf("expected installer download: %+v", info)
+			}
+			if tc.available && info.ReleaseNotes != notes {
+				t.Fatalf("expected release notes, got %q", info.ReleaseNotes)
 			}
 			if !tc.available && info.DownloadURL != "" {
 				t.Fatalf("unexpected download URL: %+v", info)

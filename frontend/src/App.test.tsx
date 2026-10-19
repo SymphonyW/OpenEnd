@@ -385,45 +385,94 @@ describe('App layout navigation', () => {
         getRecentOperationLogsForResourceMock.mockResolvedValue(operationLogs);
     });
 
-    it('offers the new installer on startup and keeps it accessible in Settings after dismissal', async () => {
+    it('shows the update above Settings with release notes on hover and keyboard focus', async () => {
         const downloadURL = 'https://github.com/SymphonyW/OpenEnd/releases/download/v2.2.0/OpenEnd-v2.2.0-windows-amd64-installer.exe';
-        checkForUpdateMock.mockResolvedValue({currentVersion: '2.1.3', latestVersion: '2.2.0', available: true, downloadURL});
+        checkForUpdateMock.mockResolvedValue({currentVersion: '2.1.3', latestVersion: '2.2.0', available: true, downloadURL, releaseNotes: 'Improved startup\nFixed process grouping'});
         render(<App/>);
-        fireEvent.click(await screen.findByRole('button', {name: 'Download new version'}));
+        const sidebar = screen.getByRole('complementary', {name: 'Primary navigation'});
+        const update = await within(sidebar).findByRole('button', {name: 'Update'});
+        const settings = within(sidebar).getByRole('button', {name: 'Settings'});
+        const version = within(sidebar).getByLabelText('Current version');
+        expect(update.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(settings.compareDocumentPosition(version) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(version).toHaveTextContent('v2.1.3');
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+        fireEvent.mouseEnter(update);
+        expect(screen.getByRole('tooltip')).toHaveTextContent('New version available: v2.2.0');
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Improved startup');
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Fixed process grouping');
+        expect(update).toHaveAttribute('aria-describedby', screen.getByRole('tooltip').id);
+        fireEvent.mouseLeave(update.parentElement!);
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+        fireEvent.focus(update);
+        expect(screen.getByRole('tooltip')).toBeInTheDocument();
+        fireEvent.keyDown(update, {key: 'Escape'});
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: 'OpenEnd'}));
+        expect(sidebar).toHaveClass('is-collapsed');
+        fireEvent.click(update);
         expect(browserOpenURLMock).toHaveBeenCalledWith(downloadURL);
-        fireEvent.click(screen.getByRole('button', {name: 'Remind me later'}));
-        expect(screen.queryByRole('button', {name: 'Download new version'})).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
-        expect(screen.getByRole('button', {name: 'Download new version'})).toBeInTheDocument();
-        expect(screen.getByText('Current version v2.1.3')).toBeInTheDocument();
         expect(checkForUpdateMock).toHaveBeenCalledTimes(1);
-        await screen.findByRole('list', {name: 'Default protected processes'});
     });
 
-    it('keeps startup failures quiet and allows retrying from Settings', async () => {
-        checkForUpdateMock.mockRejectedValue(new Error('offline'));
+    it('places the installed version below Settings and hides update controls when up to date', async () => {
         render(<App/>);
-        await waitFor(() => expect(checkForUpdateMock).toHaveBeenCalledTimes(1));
-        expect(screen.queryByLabelText('Application updates')).not.toBeInTheDocument();
+        const sidebar = screen.getByRole('complementary', {name: 'Primary navigation'});
+        await waitFor(() => expect(within(sidebar).getByLabelText('Current version')).toHaveTextContent('v2.1.3'));
+        expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
-        expect(await screen.findByText(/Could not check for updates/)).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', {name: 'Open GitHub Releases'}));
-        expect(browserOpenURLMock).toHaveBeenCalledWith('https://github.com/SymphonyW/OpenEnd/releases');
-        checkForUpdateMock.mockResolvedValue({currentVersion: '2.1.3', latestVersion: '2.1.3', available: false, downloadURL: ''});
-        fireEvent.click(screen.getByRole('button', {name: 'Check for updates'}));
-        expect(await screen.findByText('You are up to date.')).toBeInTheDocument();
-        expect(screen.queryByText(/Could not check for updates/)).not.toBeInTheDocument();
+        await screen.findByRole('list', {name: 'Default protected processes'});
+        expect(screen.queryByRole('button', {name: 'Check for updates'})).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
+        expect(within(sidebar).getByLabelText('Current version')).toBeInTheDocument();
     });
 
-    it('disables repeated checks while a request is pending', async () => {
+    it('keeps update controls hidden when an automatic check fails', async () => {
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        checkForUpdateMock.mockRejectedValue(new Error('offline'));
+        try {
+            render(<App/>);
+            await waitFor(() => expect(warning).toHaveBeenCalledWith('Could not check for application updates:', expect.any(Error)));
+            expect(screen.getByLabelText('Current version')).toHaveTextContent('v2.1.3');
+            fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
+            await screen.findByRole('list', {name: 'Default protected processes'});
+            expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', {name: 'Check for updates'})).not.toBeInTheDocument();
+            expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+        } finally {
+            warning.mockRestore();
+        }
+    });
+
+    it('keeps the update hidden until a newer version is confirmed', async () => {
         let resolveUpdate!: (value: {currentVersion: string; latestVersion: string; available: boolean; downloadURL: string}) => void;
         checkForUpdateMock.mockReturnValue(new Promise(resolve => { resolveUpdate = resolve; }));
         render(<App/>);
         fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
-        expect(screen.getByRole('button', {name: 'Checking…'})).toBeDisabled();
+        await screen.findByRole('list', {name: 'Default protected processes'});
+        expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', {name: 'Check for updates'})).not.toBeInTheDocument();
         await act(async () => resolveUpdate({currentVersion: '2.1.3', latestVersion: '2.1.3', available: false, downloadURL: ''}));
-        expect(screen.getByRole('button', {name: 'Check for updates'})).toBeEnabled();
+        expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
         expect(checkForUpdateMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('discovers later releases automatically and stops checking after unmount', async () => {
+        vi.useFakeTimers();
+        getSystemResourceInfoMock.mockReturnValue(new Promise(() => {}));
+        checkForUpdateMock
+            .mockResolvedValueOnce({currentVersion: '2.1.3', latestVersion: '2.1.3', available: false, downloadURL: ''})
+            .mockResolvedValueOnce({currentVersion: '2.1.3', latestVersion: '2.2.0', available: true, downloadURL: 'https://github.com/SymphonyW/OpenEnd/releases/download/v2.2.0/OpenEnd-v2.2.0-windows-amd64-installer.exe', releaseNotes: ''});
+        const {unmount} = render(<App/>);
+        await act(async () => {});
+        expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
+        await act(async () => { vi.advanceTimersByTime(6 * 60 * 60 * 1000); });
+        const update = screen.getByRole('button', {name: 'Update'});
+        fireEvent.mouseEnter(update);
+        expect(screen.getByRole('tooltip')).toHaveTextContent('No release notes were provided for this version.');
+        expect(checkForUpdateMock).toHaveBeenCalledTimes(2);
+        unmount();
+        expect(vi.getTimerCount()).toBe(0);
     });
 
     it('renders all primary navigation pages and highlights Performance by default', async () => {

@@ -309,6 +309,7 @@ export namespace main {
 	    latestVersion: string;
 	    available: boolean;
 	    downloadURL: string;
+	    releaseNotes: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateInfo(source);
@@ -320,6 +321,7 @@ export namespace main {
 	        this.latestVersion = source["latestVersion"];
 	        this.available = source["available"];
 	        this.downloadURL = source["downloadURL"];
+	        this.releaseNotes = source["releaseNotes"];
 	    }
 	}
 

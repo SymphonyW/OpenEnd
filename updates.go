@@ -23,6 +23,7 @@ type UpdateInfo struct {
 	LatestVersion  string `json:"latestVersion"`
 	Available      bool   `json:"available"`
 	DownloadURL    string `json:"downloadURL"`
+	ReleaseNotes   string `json:"releaseNotes"`
 }
 
 // AppVersion reads the same version used by the Windows installer.
@@ -78,6 +79,7 @@ func checkLatestRelease(ctx context.Context, current string, client *http.Client
 		TagName    string `json:"tag_name"`
 		Draft      bool   `json:"draft"`
 		Prerelease bool   `json:"prerelease"`
+		Body       string `json:"body"`
 		Assets     []struct {
 			Name  string `json:"name"`
 			State string `json:"state"`
@@ -111,6 +113,7 @@ func checkLatestRelease(ctx context.Context, current string, client *http.Client
 		if asset.Name == name && asset.State == "uploaded" && asset.URL == expectedURL {
 			info.Available = true
 			info.DownloadURL = expectedURL
+			info.ReleaseNotes = strings.TrimSpace(release.Body)
 			return info, nil
 		}
 	}

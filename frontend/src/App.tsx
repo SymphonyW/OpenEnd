@@ -1,7 +1,6 @@
 import {useEffect, useMemo, useState} from 'react';
 import './App.css';
 import Sidebar from './components/Sidebar';
-import UpdateNotice from './components/UpdateNotice';
 import {PageActivityContext} from './hooks/useSequentialAutoRefresh';
 import PagePanel from './pages/PagePanel';
 import {
@@ -48,7 +47,6 @@ function App() {
                 onSelectPage={selectPage}
             />
             <main className="main-content" aria-label={activePage.label}>
-                <UpdateNotice t={t} showDetails={activePageId === 'settings'}/>
                 <ProjectNavigationContext.Provider value={{target: projectTarget, navigate: (page, path) => {
                     setProjectTarget(current => ({page, path, sequence: (current?.sequence ?? 0) + 1}));
                     selectPage(page);

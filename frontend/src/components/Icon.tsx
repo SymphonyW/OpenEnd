@@ -1,10 +1,11 @@
 import type {PageId} from '../types/navigation';
 
-type IconName = PageId | 'menu' | 'app';
+type IconName = PageId | 'menu' | 'app' | 'update';
 
 const paths: Record<IconName, string> = {
     app: 'M4 17V9m5 8V4m5 13v-6m5 6V7',
     menu: 'M4 6h16M4 12h16M4 18h16',
+    update: 'M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5',
     dashboard: 'M3 17V5m0 14h18M6 14l4-5 4 3 6-8',
     processes: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
     ports: 'M8 3v5m8-5v5M6 8h12v4a6 6 0 0 1-12 0V8zm6 10v3',
