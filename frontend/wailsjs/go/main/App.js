@@ -14,6 +14,14 @@ export function AppName() {
   return window['go']['main']['App']['AppName']();
 }
 
+export function AppVersion() {
+  return window['go']['main']['App']['AppVersion']();
+}
+
+export function CheckForUpdate() {
+  return window['go']['main']['App']['CheckForUpdate']();
+}
+
 export function DeleteCleanupRule(arg1) {
   return window['go']['main']['App']['DeleteCleanupRule'](arg1);
 }

@@ -22,11 +22,19 @@ const deleteCleanupRuleMock = vi.fn();
 const getOperationLogsMock = vi.fn();
 const getRecentOperationLogsForResourceMock = vi.fn();
 const setProcessProjectMock = vi.fn();
+const checkForUpdateMock = vi.fn();
+const browserOpenURLMock = vi.fn();
+
+vi.mock('../wailsjs/runtime/runtime', () => ({
+    BrowserOpenURL: (url: string) => browserOpenURLMock(url),
+}));
 
 vi.mock('../wailsjs/go/main/App', () => ({
     AddCleanupRule: (input: CleanupRuleInputFixture) => addCleanupRuleMock(input),
     AddCustomProtectedProcessName: (name: string) => addCustomProtectedProcessNameMock(name),
     AppName: () => new Promise(() => {}),
+    AppVersion: () => Promise.resolve('2.1.3'),
+    CheckForUpdate: () => checkForUpdateMock(),
     DeleteCleanupRule: (id: string) => deleteCleanupRuleMock(id),
     DeleteCustomProtectedProcessName: (name: string) => deleteCustomProtectedProcessNameMock(name),
     GetCleanupRules: () => getCleanupRulesMock(),
@@ -306,6 +314,9 @@ describe('App layout navigation', () => {
 
     beforeEach(() => {
         window.localStorage.clear();
+        checkForUpdateMock.mockReset();
+        checkForUpdateMock.mockResolvedValue({currentVersion: '2.1.3', latestVersion: '2.1.3', available: false, downloadURL: ''});
+        browserOpenURLMock.mockReset();
         getSystemResourceInfoMock.mockReset();
         getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo());
         getProcessListMock.mockReset();
@@ -372,6 +383,47 @@ describe('App layout navigation', () => {
         getOperationLogsMock.mockResolvedValue(operationLogs);
         getRecentOperationLogsForResourceMock.mockReset();
         getRecentOperationLogsForResourceMock.mockResolvedValue(operationLogs);
+    });
+
+    it('offers the new installer on startup and keeps it accessible in Settings after dismissal', async () => {
+        const downloadURL = 'https://github.com/SymphonyW/OpenEnd/releases/download/v2.2.0/OpenEnd-v2.2.0-windows-amd64-installer.exe';
+        checkForUpdateMock.mockResolvedValue({currentVersion: '2.1.3', latestVersion: '2.2.0', available: true, downloadURL});
+        render(<App/>);
+        fireEvent.click(await screen.findByRole('button', {name: 'Download new version'}));
+        expect(browserOpenURLMock).toHaveBeenCalledWith(downloadURL);
+        fireEvent.click(screen.getByRole('button', {name: 'Remind me later'}));
+        expect(screen.queryByRole('button', {name: 'Download new version'})).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
+        expect(screen.getByRole('button', {name: 'Download new version'})).toBeInTheDocument();
+        expect(screen.getByText('Current version v2.1.3')).toBeInTheDocument();
+        expect(checkForUpdateMock).toHaveBeenCalledTimes(1);
+        await screen.findByRole('list', {name: 'Default protected processes'});
+    });
+
+    it('keeps startup failures quiet and allows retrying from Settings', async () => {
+        checkForUpdateMock.mockRejectedValue(new Error('offline'));
+        render(<App/>);
+        await waitFor(() => expect(checkForUpdateMock).toHaveBeenCalledTimes(1));
+        expect(screen.queryByLabelText('Application updates')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
+        expect(await screen.findByText(/Could not check for updates/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: 'Open GitHub Releases'}));
+        expect(browserOpenURLMock).toHaveBeenCalledWith('https://github.com/SymphonyW/OpenEnd/releases');
+        checkForUpdateMock.mockResolvedValue({currentVersion: '2.1.3', latestVersion: '2.1.3', available: false, downloadURL: ''});
+        fireEvent.click(screen.getByRole('button', {name: 'Check for updates'}));
+        expect(await screen.findByText('You are up to date.')).toBeInTheDocument();
+        expect(screen.queryByText(/Could not check for updates/)).not.toBeInTheDocument();
+    });
+
+    it('disables repeated checks while a request is pending', async () => {
+        let resolveUpdate!: (value: {currentVersion: string; latestVersion: string; available: boolean; downloadURL: string}) => void;
+        checkForUpdateMock.mockReturnValue(new Promise(resolve => { resolveUpdate = resolve; }));
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
+        expect(screen.getByRole('button', {name: 'Checking…'})).toBeDisabled();
+        await act(async () => resolveUpdate({currentVersion: '2.1.3', latestVersion: '2.1.3', available: false, downloadURL: ''}));
+        expect(screen.getByRole('button', {name: 'Check for updates'})).toBeEnabled();
+        expect(checkForUpdateMock).toHaveBeenCalledTimes(1);
     });
 
     it('renders all primary navigation pages and highlights Performance by default', async () => {

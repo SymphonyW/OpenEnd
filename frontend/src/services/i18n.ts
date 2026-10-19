@@ -8,6 +8,17 @@ export const languages = [
 export type LanguageCode = typeof languages[number]['code'];
 
 const englishTranslations = {
+    'updates.title': 'Application updates',
+    'updates.current': 'Current version',
+    'updates.available': 'New version available:',
+    'updates.installHint': 'Download the installer, close OpenEnd, then run it to update.',
+    'updates.download': 'Download new version',
+    'updates.check': 'Check for updates',
+    'updates.checking': 'Checking…',
+    'updates.latest': 'You are up to date.',
+    'updates.error': 'Could not check for updates. Check your connection and retry, or visit GitHub Releases.',
+    'updates.releases': 'Open GitHub Releases',
+    'updates.later': 'Remind me later',
     'projects.view': 'View mode',
     'projects.all': 'All',
     'projects.grouped': 'Apps & projects',
@@ -278,6 +289,17 @@ export type TranslationKey = keyof typeof englishTranslations;
 export type Translator = (key: TranslationKey) => string;
 
 const chineseTranslations: Record<TranslationKey, string> = {
+    'updates.title': '应用更新',
+    'updates.current': '当前版本',
+    'updates.available': '发现新版本：',
+    'updates.installHint': '下载安装包后，关闭 OpenEnd，再运行安装包完成更新。',
+    'updates.download': '下载新版本',
+    'updates.check': '检查更新',
+    'updates.checking': '正在检查…',
+    'updates.latest': '当前已是最新版本。',
+    'updates.error': '暂时无法检查更新，请检查网络后重试，或前往 GitHub 发布页查看。',
+    'updates.releases': '前往 GitHub 发布页',
+    'updates.later': '稍后提醒',
     'projects.view': '查看方式',
     'projects.all': '全部',
     'projects.grouped': '应用与项目',

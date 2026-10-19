@@ -144,6 +144,14 @@ checkout -> setup Go -> setup Node -> npm install -> install Wails -> install NS
 
 ## GitHub Release 发布
 
+应用会在启动后和运行期间每隔 6 小时检查一次新版本，也可在设置页手动检查。发现新版后显示“下载新版本”按钮，通过系统浏览器下载 Windows x64 安装包；用户下载后关闭 OpenEnd，再运行安装包完成更新。自动检查失败不会打断使用，设置页会显示重试提示和发布页入口。
+
+当前版本直接读取打包进程序的 `wails.json` 中的 `info.productVersion`。发布时更新此字段，使用对应的 `vX.Y.Z` 正式版本标签，并上传 `OpenEnd-vX.Y.Z-windows-amd64-installer.exe`。安装包必须上传完成，并将该正式 Release 设为 Latest，旧版应用才能检测并提供下载。草稿、预发布、相同版本和更低版本不会提示升级。
+
+检查使用 [GitHub 最新正式版本接口](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)，无需在应用中配置 GitHub token。网络不可达或接口限流时，用户可稍后重试。
+
+已发布且未包含更新检查功能的旧安装包，需要用户先手动升级一次到包含此功能的版本，此后才能收到更新提醒。
+
 当前建议使用人工确认后的 Release 流程:
 
 1. 从成功的 Actions run 下载 `openend-windows-unsigned`。
