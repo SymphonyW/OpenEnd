@@ -14,7 +14,7 @@
     !define INFO_PRODUCTNAME "OpenEnd"
 !endif
 !ifndef INFO_PRODUCTVERSION
-    !define INFO_PRODUCTVERSION "2.1.3"
+    !define INFO_PRODUCTVERSION "2.2.1"
 !endif
 !ifndef INFO_COPYRIGHT
     !define INFO_COPYRIGHT "Copyright (c) 2026 SymphonyW"
