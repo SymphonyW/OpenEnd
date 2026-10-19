@@ -179,7 +179,7 @@ function resourceSubtitle(info: SystemResourceInfo | null, key: ResourceKey, t: 
         return formatList(info.gpuNames, t);
     }
 
-    return metricValue(info, 'vram', info.totalVRAMBytes > 0 ? formatMemorySize(info.totalVRAMBytes) : t('common.unavailable'), t);
+    return info.totalVRAMBytes > 0 ? formatMemorySize(info.totalVRAMBytes) : metricValue(info, 'vram', t('common.unavailable'), t);
 }
 
 function buildMetrics(info: SystemResourceInfo, key: ResourceKey, usage: number, t: Translator): Metric[] {
@@ -213,9 +213,9 @@ function buildMetrics(info: SystemResourceInfo, key: ResourceKey, usage: number,
     if (key === 'gpu') {
         return [
             {label: t('dashboard.metric.usage'), value: metricValue(info, key, formatPercent(usage), t)},
-            {label: t('dashboard.metric.gpuModel'), value: metricValue(info, 'gpu', formatList(info.gpuNames, t), t)},
+            {label: t('dashboard.metric.gpuModel'), value: formatList(info.gpuNames, t)},
             {label: t('dashboard.metric.usedVRAM'), value: metricValue(info, 'vram', formatMemorySize(info.usedVRAMBytes), t)},
-            {label: t('dashboard.metric.totalVRAM'), value: metricValue(info, 'vram', info.totalVRAMBytes > 0 ? formatMemorySize(info.totalVRAMBytes) : t('common.unavailable'), t)},
+            {label: t('dashboard.metric.totalVRAM'), value: resourceSubtitle(info, 'vram', t)},
         ];
     }
 
@@ -223,8 +223,8 @@ function buildMetrics(info: SystemResourceInfo, key: ResourceKey, usage: number,
         {label: t('dashboard.metric.usage'), value: metricValue(info, key, formatPercent(usage), t)},
         {label: t('dashboard.metric.usedVRAM'), value: metricValue(info, 'vram', formatMemorySize(info.usedVRAMBytes), t)},
         {label: t('dashboard.metric.freeVRAM'), value: metricValue(info, 'vram', formatMemorySize(info.freeVRAMBytes), t)},
-        {label: t('dashboard.metric.totalVRAM'), value: metricValue(info, 'vram', info.totalVRAMBytes > 0 ? formatMemorySize(info.totalVRAMBytes) : t('common.unavailable'), t)},
-        {label: t('dashboard.metric.gpuModel'), value: metricValue(info, 'gpu', formatList(info.gpuNames, t), t)},
+        {label: t('dashboard.metric.totalVRAM'), value: resourceSubtitle(info, 'vram', t)},
+        {label: t('dashboard.metric.gpuModel'), value: formatList(info.gpuNames, t)},
     ];
 }
 

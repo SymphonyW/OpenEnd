@@ -50,26 +50,9 @@ func TestBuildGPUInfoCalculatesVRAMUsage(t *testing.T) {
 	}
 }
 
-func TestCachedTotalVRAMReaderReusesSuccessfulValue(t *testing.T) {
-	calls := 0
-	reader := newCachedTotalVRAMReader(func() (uint64, error) {
-		calls += 1
-		return 8 * 1024 * 1024 * 1024, nil
-	})
-
-	first, err := reader.Read()
-	if err != nil {
-		t.Fatalf("read first total VRAM value: %v", err)
-	}
-	second, err := reader.Read()
-	if err != nil {
-		t.Fatalf("read cached total VRAM value: %v", err)
-	}
-
-	if first != second {
-		t.Fatalf("expected cached VRAM value %d to match first value %d", second, first)
-	}
-	if calls != 1 {
-		t.Fatalf("expected one underlying total VRAM read, got %d", calls)
+func TestBuildGPUInfoPreservesFractionalUsage(t *testing.T) {
+	info := buildGPUInfo([]gpuEngineCounter{{UtilizationPercentage: 0.8}, {UtilizationPercentage: 0.6}}, nil, nil, 0)
+	if info.GPUPercent != 1.4 {
+		t.Fatalf("expected fractional counter values, got %v", info.GPUPercent)
 	}
 }

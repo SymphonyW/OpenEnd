@@ -22,24 +22,26 @@ type gpuResourceReading struct {
 
 var defaultAsyncSystemResourceCollectors = newAsyncSystemResourceCollectors()
 
+const resourceCollectionTimeout = 10 * time.Second
+
 func newAsyncSystemResourceCollectors() systemResourceCollectors {
-	cpu := newResourceCollector(collectCPUPercent, 0, false)
+	cpu := newResourceCollector(collectCPUPercent, 0)
 	cpuInfo := newResourceCollector(func() (cpuResourceInfo, error) {
 		value := collectCPUResourceInfo()
 		if value.Name == "" {
 			return value, fmt.Errorf("CPU information unavailable")
 		}
 		return value, nil
-	}, 5*time.Second, false)
+	}, 5*time.Second)
 	cpuInfo.cacheValid = func(info cpuResourceInfo) bool {
 		return info.Name != "" && info.MaxMHz > 0 && info.PhysicalCores > 0 && info.LogicalProcessors > 0
 	}
-	memory := newResourceCollector(collectMemoryResourceInfo, 0, false)
-	gpu := newResourceCollector(newGPUResourceReader(resource.GetGPUInfo), 5*time.Second, true)
-	processes := newResourceCollector(collectProcessCount, 0, false)
-	threads := newResourceCollector(collectThreadCount, 5*time.Second, true)
-	ports := newResourceCollector(collectPortCount, 10*time.Second, true)
-	uptime := newResourceCollector(collectUptimeSeconds, 0, false)
+	memory := newResourceCollector(collectMemoryResourceInfo, 0)
+	gpu := newResourceCollector(newGPUResourceReader(resource.GetGPUInfo), 5*time.Second)
+	processes := newResourceCollector(collectProcessCount, 0)
+	threads := newResourceCollector(collectThreadCount, 5*time.Second)
+	ports := newResourceCollector(collectPortCount, 10*time.Second)
+	uptime := newResourceCollector(collectUptimeSeconds, 0)
 	return systemResourceCollectors{
 		CPUPercent: cpu.Get, CPUInfo: cpuInfo.Get, Memory: memory.Get, GPU: gpu.Get,
 		ProcessCount: processes.Get, ThreadCount: threads.Get, PortCount: ports.Get, Uptime: uptime.Get,
@@ -60,7 +62,9 @@ func newGPUResourceReader(read func() resource.GPUInfo) func() (gpuResourceReadi
 			}
 		}
 		if vramStatus.State != "ready" {
-			next.TotalVRAMBytes = previous.Info.TotalVRAMBytes
+			if next.TotalVRAMBytes == 0 {
+				next.TotalVRAMBytes = previous.Info.TotalVRAMBytes
+			}
 			next.UsedVRAMBytes = previous.Info.UsedVRAMBytes
 			next.FreeVRAMBytes = previous.Info.FreeVRAMBytes
 		}
@@ -87,28 +91,27 @@ type resourceCollector[T any] struct {
 	collect     func() (T, error)
 	cacheValid  func(T) bool
 	interval    time.Duration
-	async       bool
 	value       T
 	status      ResourceStatus
 	inFlight    bool
 	lastStarted time.Time
 }
 
-func newResourceCollector[T any](collect func() (T, error), interval time.Duration, async bool) *resourceCollector[T] {
-	return &resourceCollector[T]{collect: collect, interval: interval, async: async, status: ResourceStatus{State: "collecting"}}
+func newResourceCollector[T any](collect func() (T, error), interval time.Duration) *resourceCollector[T] {
+	return &resourceCollector[T]{collect: collect, interval: interval, status: ResourceStatus{State: "collecting"}}
 }
 
 func (c *resourceCollector[T]) Get() (T, ResourceStatus) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.inFlight && time.Since(c.lastStarted) >= resourceCollectionTimeout {
+		c.status = nextResourceStatus(c.status, "资源采集超时，正在等待当前查询结束。其他指标仍可正常刷新。")
+	}
 	if !c.inFlight && (c.cacheValid == nil || !c.cacheValid(c.value)) && (c.lastStarted.IsZero() || time.Since(c.lastStarted) >= c.interval) {
 		c.lastStarted = time.Now()
 		c.inFlight = true
-		if c.async {
-			go c.refresh()
-		} else {
-			c.update()
-		}
+		// Never hold the snapshot response or this mutex while calling native APIs.
+		go c.refresh()
 	}
 	return c.value, c.status
 }
@@ -120,7 +123,6 @@ func (c *resourceCollector[T]) refresh() {
 	c.save(value, err)
 }
 
-func (c *resourceCollector[T]) update() { value, err := safeCollect(c.collect); c.save(value, err) }
 func (c *resourceCollector[T]) save(value T, err error) {
 	c.inFlight = false
 	if err != nil {
