@@ -18,7 +18,7 @@
 
 # OpenEnd
 
-[下载Windows版本的安装包](https://github.com/SymphonyW/OpenEnd/releases/download/v2.1.3/OpenEnd-v2.1.3-windows-amd64-installer.exe)
+[下载Windows版本的安装包](https://github.com/SymphonyW/OpenEnd/releases/download/v2.2.0/OpenEnd-v2.2.0-windows-amd64-installer.exe)
 
 [本项目的博客文章](https://symphonyw.github.io/zh-cn/p/openend/)
 
