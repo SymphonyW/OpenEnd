@@ -1,6 +1,16 @@
 import type {OperationLog} from './logs';
 
 export interface ProcessInfo {
+	parentPID?: number;
+	workingDirectory?: string;
+	workingDirectoryError?: string;
+	projectPath?: string;
+	projectName?: string;
+	projectReason?: string;
+	projectRuleSource?: string;
+    applicationPath?: string;
+    applicationName?: string;
+    applicationReason?: string;
     pid: number;
     createdAt: number;
     name: string;

@@ -32,6 +32,7 @@ It is built with Wails, Go, React, TypeScript, and Vite. The project focuses on 
 | --- | --- |
 | Dashboard | View CPU, memory, process, port, and GPU-related system resource data |
 | Processes | Inspect running processes, resource usage, executable paths, commands, and process details |
+| Apps & Projects | Group processes and ports by application or development project, with shared ownership and manual project assignments |
 | Ports | Identify occupied TCP/UDP ports and map them back to owning processes |
 | Cleanup | Review development-related processes before taking cleanup actions |
 | Safety | Protect critical Windows processes from accidental termination |

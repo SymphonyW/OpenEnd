@@ -43,6 +43,7 @@ function ScrollableDataTable({children, className = '', scrollbarLabel}: Scrolla
         }
 
         const maxScrollLeft = Math.max(0, tableWrapper.scrollWidth - tableWrapper.clientWidth);
+        tableWrapper.style.setProperty('--table-viewport-width', `${tableWrapper.clientWidth}px`);
         scrollbarSpacer.style.width = `${tableWrapper.scrollWidth}px`;
         if (scrollbar.scrollLeft !== tableWrapper.scrollLeft) {
             scrollbar.scrollLeft = tableWrapper.scrollLeft;

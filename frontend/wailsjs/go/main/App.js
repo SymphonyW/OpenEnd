@@ -14,6 +14,14 @@ export function AppName() {
   return window['go']['main']['App']['AppName']();
 }
 
+export function AppVersion() {
+  return window['go']['main']['App']['AppVersion']();
+}
+
+export function CheckForUpdate() {
+  return window['go']['main']['App']['CheckForUpdate']();
+}
+
 export function DeleteCleanupRule(arg1) {
   return window['go']['main']['App']['DeleteCleanupRule'](arg1);
 }
@@ -64,4 +72,8 @@ export function KillProcessByPort(arg1, arg2, arg3, arg4) {
 
 export function SetCleanupRuleEnabled(arg1, arg2) {
   return window['go']['main']['App']['SetCleanupRuleEnabled'](arg1, arg2);
+}
+
+export function SetProcessProject(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SetProcessProject'](arg1, arg2, arg3, arg4, arg5);
 }

@@ -5,7 +5,7 @@
 .resource-select:hover { background: var(--surface-muted); }
 .resource-select[aria-pressed="true"] { background: #f0f0f0; }
 .resource-mini-chart { width: 60px; height: 40px; border: 1px solid var(--accent-border); flex-shrink: 0; background: var(--surface-blue); }
-.resource-mini-chart polyline { fill: none; stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.resource-mini-chart polyline, .resource-mini-chart line { fill: none; stroke: var(--accent); stroke-width: 1; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .resource-select-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .resource-select-title { font-size: 13px; }
 .resource-select-value { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -16,6 +16,7 @@
 .performance-heading > span { max-width: min(58%, 640px); color: var(--text-muted); font-size: 12px; line-height: 1.5; text-align: right; overflow-wrap: anywhere; }
 .performance-chart-label { display: flex; align-items: center; justify-content: space-between; color: var(--text-soft); font-size: 11px; line-height: 26px; }
 .performance-chart-frame { position: relative; height: clamp(220px, 42vh, 440px); border: 1px solid var(--accent-border); background: #fcfdfe; }
+.performance-chart-status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-soft); font-size: 12px; pointer-events: none; }
 .performance-graph { display: block; width: 100%; height: 100%; overflow: hidden; }
 .performance-grid line { stroke: #e2edf5; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .performance-area { fill: #eaf3fa; }
@@ -25,6 +26,7 @@
 .performance-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 24px 28px; margin: 26px 0 0; }
 .performance-metrics dt { color: var(--text-muted); font-size: 12px; margin-bottom: 7px; }
 .performance-metrics dd { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 400; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.resource-metric-status { display: block; margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .resource-updated-at { margin: 30px 0 0; color: var(--text-soft); font-size: 11px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 1100px) {

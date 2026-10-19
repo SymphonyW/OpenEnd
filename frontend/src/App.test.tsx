@@ -21,11 +21,20 @@ const setCleanupRuleEnabledMock = vi.fn();
 const deleteCleanupRuleMock = vi.fn();
 const getOperationLogsMock = vi.fn();
 const getRecentOperationLogsForResourceMock = vi.fn();
+const setProcessProjectMock = vi.fn();
+const checkForUpdateMock = vi.fn();
+const browserOpenURLMock = vi.fn();
+
+vi.mock('../wailsjs/runtime/runtime', () => ({
+    BrowserOpenURL: (url: string) => browserOpenURLMock(url),
+}));
 
 vi.mock('../wailsjs/go/main/App', () => ({
     AddCleanupRule: (input: CleanupRuleInputFixture) => addCleanupRuleMock(input),
     AddCustomProtectedProcessName: (name: string) => addCustomProtectedProcessNameMock(name),
     AppName: () => new Promise(() => {}),
+    AppVersion: () => Promise.resolve('2.1.3'),
+    CheckForUpdate: () => checkForUpdateMock(),
     DeleteCleanupRule: (id: string) => deleteCleanupRuleMock(id),
     DeleteCustomProtectedProcessName: (name: string) => deleteCustomProtectedProcessNameMock(name),
     GetCleanupRules: () => getCleanupRulesMock(),
@@ -39,6 +48,7 @@ vi.mock('../wailsjs/go/main/App', () => ({
     KillProcessByPID: (pid: number, createdAt: number) => killProcessByPIDMock(pid, createdAt),
     KillProcessByPort: (port: number, protocol: string, pid: number, createdAt: number) => killProcessByPortMock(port, protocol, pid, createdAt),
     SetCleanupRuleEnabled: (id: string, enabled: boolean) => setCleanupRuleEnabledMock(id, enabled),
+    SetProcessProject: (pid: number, createdAt: number, path: string, remember: boolean, reset: boolean) => setProcessProjectMock(pid, createdAt, path, remember, reset),
 }));
 
 interface CleanupPortRangeFixture {
@@ -304,10 +314,15 @@ describe('App layout navigation', () => {
 
     beforeEach(() => {
         window.localStorage.clear();
+        checkForUpdateMock.mockReset();
+        checkForUpdateMock.mockResolvedValue({currentVersion: '2.1.3', latestVersion: '2.1.3', available: false, downloadURL: ''});
+        browserOpenURLMock.mockReset();
         getSystemResourceInfoMock.mockReset();
         getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo());
         getProcessListMock.mockReset();
         getProcessListMock.mockResolvedValue(processRows);
+        setProcessProjectMock.mockReset();
+        setProcessProjectMock.mockResolvedValue(undefined);
         getProcessDetailMock.mockReset();
         getProcessDetailMock.mockResolvedValue(nodeProcessDetail);
         getPortListMock.mockReset();
@@ -370,6 +385,96 @@ describe('App layout navigation', () => {
         getRecentOperationLogsForResourceMock.mockResolvedValue(operationLogs);
     });
 
+    it('shows the update above Settings with release notes on hover and keyboard focus', async () => {
+        const downloadURL = 'https://github.com/SymphonyW/OpenEnd/releases/download/v2.2.0/OpenEnd-v2.2.0-windows-amd64-installer.exe';
+        checkForUpdateMock.mockResolvedValue({currentVersion: '2.1.3', latestVersion: '2.2.0', available: true, downloadURL, releaseNotes: 'Improved startup\nFixed process grouping'});
+        render(<App/>);
+        const sidebar = screen.getByRole('complementary', {name: 'Primary navigation'});
+        const update = await within(sidebar).findByRole('button', {name: 'Update'});
+        const settings = within(sidebar).getByRole('button', {name: 'Settings'});
+        const version = within(sidebar).getByLabelText('Current version');
+        expect(update.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(settings.compareDocumentPosition(version) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(version).toHaveTextContent('v2.1.3');
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+        fireEvent.mouseEnter(update);
+        expect(screen.getByRole('tooltip')).toHaveTextContent('New version available: v2.2.0');
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Improved startup');
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Fixed process grouping');
+        expect(update).toHaveAttribute('aria-describedby', screen.getByRole('tooltip').id);
+        fireEvent.mouseLeave(update.parentElement!);
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+        fireEvent.focus(update);
+        expect(screen.getByRole('tooltip')).toBeInTheDocument();
+        fireEvent.keyDown(update, {key: 'Escape'});
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: 'OpenEnd'}));
+        expect(sidebar).toHaveClass('is-collapsed');
+        fireEvent.click(update);
+        expect(browserOpenURLMock).toHaveBeenCalledWith(downloadURL);
+        expect(checkForUpdateMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('places the installed version below Settings and hides update controls when up to date', async () => {
+        render(<App/>);
+        const sidebar = screen.getByRole('complementary', {name: 'Primary navigation'});
+        await waitFor(() => expect(within(sidebar).getByLabelText('Current version')).toHaveTextContent('v2.1.3'));
+        expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
+        await screen.findByRole('list', {name: 'Default protected processes'});
+        expect(screen.queryByRole('button', {name: 'Check for updates'})).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
+        expect(within(sidebar).getByLabelText('Current version')).toBeInTheDocument();
+    });
+
+    it('keeps update controls hidden when an automatic check fails', async () => {
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        checkForUpdateMock.mockRejectedValue(new Error('offline'));
+        try {
+            render(<App/>);
+            await waitFor(() => expect(warning).toHaveBeenCalledWith('Could not check for application updates:', expect.any(Error)));
+            expect(screen.getByLabelText('Current version')).toHaveTextContent('v2.1.3');
+            fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
+            await screen.findByRole('list', {name: 'Default protected processes'});
+            expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', {name: 'Check for updates'})).not.toBeInTheDocument();
+            expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+        } finally {
+            warning.mockRestore();
+        }
+    });
+
+    it('keeps the update hidden until a newer version is confirmed', async () => {
+        let resolveUpdate!: (value: {currentVersion: string; latestVersion: string; available: boolean; downloadURL: string}) => void;
+        checkForUpdateMock.mockReturnValue(new Promise(resolve => { resolveUpdate = resolve; }));
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
+        await screen.findByRole('list', {name: 'Default protected processes'});
+        expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', {name: 'Check for updates'})).not.toBeInTheDocument();
+        await act(async () => resolveUpdate({currentVersion: '2.1.3', latestVersion: '2.1.3', available: false, downloadURL: ''}));
+        expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
+        expect(checkForUpdateMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('discovers later releases automatically and stops checking after unmount', async () => {
+        vi.useFakeTimers();
+        getSystemResourceInfoMock.mockReturnValue(new Promise(() => {}));
+        checkForUpdateMock
+            .mockResolvedValueOnce({currentVersion: '2.1.3', latestVersion: '2.1.3', available: false, downloadURL: ''})
+            .mockResolvedValueOnce({currentVersion: '2.1.3', latestVersion: '2.2.0', available: true, downloadURL: 'https://github.com/SymphonyW/OpenEnd/releases/download/v2.2.0/OpenEnd-v2.2.0-windows-amd64-installer.exe', releaseNotes: ''});
+        const {unmount} = render(<App/>);
+        await act(async () => {});
+        expect(screen.queryByRole('button', {name: 'Update'})).not.toBeInTheDocument();
+        await act(async () => { vi.advanceTimersByTime(6 * 60 * 60 * 1000); });
+        const update = screen.getByRole('button', {name: 'Update'});
+        fireEvent.mouseEnter(update);
+        expect(screen.getByRole('tooltip')).toHaveTextContent('No release notes were provided for this version.');
+        expect(checkForUpdateMock).toHaveBeenCalledTimes(2);
+        unmount();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('renders all primary navigation pages and highlights Performance by default', async () => {
         render(<App/>);
 
@@ -389,7 +494,7 @@ describe('App layout navigation', () => {
         expect(screen.getByRole('button', {name: 'Feedback'})).toBeInTheDocument();
         expect(screen.getByRole('button', {name: 'Settings'})).toBeInTheDocument();
         expect(await screen.findByLabelText('CPU usage chart')).toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Performance'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Performance'})).not.toBeInTheDocument();
         expect(screen.queryByText('System overview')).not.toBeInTheDocument();
     });
 
@@ -417,7 +522,7 @@ describe('App layout navigation', () => {
 
         expect(screen.getByRole('button', {name: 'Ports'})).toHaveAttribute('aria-current', 'page');
         expect(await screen.findByText('node.exe')).toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Ports'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Ports'})).not.toBeInTheDocument();
         expect(screen.queryByText('Review local TCP and UDP ports and the owning process.')).not.toBeInTheDocument();
     });
 
@@ -427,31 +532,35 @@ describe('App layout navigation', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Feedback'}));
 
         expect(screen.getByRole('button', {name: 'Feedback'})).toHaveAttribute('aria-current', 'page');
-        expect(screen.getByRole('heading', {level: 1, name: 'Feedback'})).toBeInTheDocument();
-        expect(screen.getAllByRole('heading', {name: 'Feedback'})).toHaveLength(1);
+        expect(screen.queryByRole('heading', {name: 'Feedback'})).not.toBeInTheDocument();
+        expect(screen.getByRole('main', {name: 'Feedback'})).toBeInTheDocument();
         expect(screen.getByText('xinzhanwu1201@gmail.com')).toBeInTheDocument();
         expect(screen.getByText('Email template')).toBeInTheDocument();
         expect(screen.getByText(/Related process or port:/)).toBeInTheDocument();
         expect(screen.getByRole('link', {name: 'Email feedback'})).toHaveAttribute('href', expect.stringContaining('mailto:xinzhanwu1201@gmail.com'));
+        await act(async () => {});
     });
 
-    it('shows one compact page title without redundant descriptions', async () => {
+    it('uses sidebar navigation to identify pages without duplicate workspace titles', async () => {
         render(<App/>);
 
         expect(await screen.findByLabelText('CPU usage chart')).toBeInTheDocument();
         expect(screen.queryByText('System overview')).not.toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Performance'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Performance'})).not.toBeInTheDocument();
+        expect(screen.getByRole('main', {name: 'Performance'})).toBeInTheDocument();
         expect(screen.queryByText('Monitor CPU, memory, GPU, VRAM, processes, and occupied ports in real time.')).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
         expect(await screen.findByText('node.exe')).toBeInTheDocument();
         expect(screen.queryByText('Process monitor')).not.toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Processes'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Processes'})).not.toBeInTheDocument();
+        expect(screen.getByRole('main', {name: 'Processes'})).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
         expect(await screen.findByText('redis-server.exe')).toBeInTheDocument();
         expect(screen.queryByText('Protection settings')).not.toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Settings'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Settings'})).not.toBeInTheDocument();
+        expect(screen.getByRole('main', {name: 'Settings'})).toBeInTheDocument();
     });
 
     it('loads Dashboard resource metrics and refreshes them automatically', async () => {
@@ -584,6 +693,50 @@ describe('App layout navigation', () => {
         expect(screen.getByLabelText('VRAM usage chart')).toBeInTheDocument();
     });
 
+    it('draws delayed GPU and VRAM series from their own first sample while preserving later collection gaps', async () => {
+        vi.useFakeTimers();
+        const ready = {state: 'ready' as const, updatedAt: 1000, error: ''};
+        const collecting = {state: 'collecting' as const, updatedAt: 0, error: ''};
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({metrics: {cpu: ready, gpu: collecting, vram: collecting}}));
+        render(<App/>);
+        await act(async () => {});
+        fireEvent.click(screen.getByRole('button', {name: 'GPU'}));
+        expect(screen.getByLabelText('GPU usage chart').querySelector('polyline')).toBeNull();
+        expect(screen.getByLabelText('GPU usage chart').parentElement).toHaveTextContent('Collecting');
+        await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({gpuPercent: 0, metrics: {cpu: ready, gpu: ready, vram: collecting}}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        expect(screen.getByLabelText('GPU usage chart').querySelector('polyline')!.getAttribute('points')).toBe('100,100');
+        expect(screen.getByText('First sample received; waiting for more data…')).toBeInTheDocument();
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({gpuPercent: 20, metrics: {cpu: ready, gpu: ready, vram: ready}}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        const gpu = screen.getByLabelText('GPU usage chart');
+        expect(gpu.querySelector('polyline')!.getAttribute('points')).toBe('0,100 100,80');
+        expect(gpu.querySelector('.performance-area')).not.toBeNull();
+        expect(screen.queryByText('First sample received; waiting for more data…')).not.toBeInTheDocument();
+        const miniGPU = within(screen.getByRole('button', {name: 'GPU'})).getByText('GPU').closest('button')!.querySelector('polyline');
+        expect(miniGPU!.getAttribute('points')).toBe('0,100 100,80');
+
+        fireEvent.click(screen.getByRole('button', {name: 'VRAM'}));
+        expect(screen.getByLabelText('VRAM usage chart').querySelector('polyline')!.getAttribute('points')).toMatch(/^100,/);
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        const vram = screen.getByLabelText('VRAM usage chart');
+        expect(vram.querySelector('polyline')!.getAttribute('points')).toMatch(/^0,[^ ]+ 100,/);
+        expect(vram.querySelector('.performance-area')).not.toBeNull();
+        expect(vram.closest('.performance-chart')).toHaveTextContent('1 s');
+
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({metrics: {cpu: ready, gpu: {state: 'unavailable', updatedAt: 0, error: 'Counter failed'}, vram: ready}}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({metrics: {cpu: ready, gpu: ready, vram: ready}}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+        fireEvent.click(screen.getByRole('button', {name: 'GPU'}));
+        const recoveredGPU = screen.getByLabelText('GPU usage chart');
+        expect(recoveredGPU.querySelectorAll('polyline')).toHaveLength(2);
+        expect(recoveredGPU.querySelectorAll('.performance-area')).toHaveLength(2);
+        expect(recoveredGPU.querySelectorAll('polyline')[1].getAttribute('points')).not.toMatch(/^0,/);
+    });
+
     it('shows interactive Dashboard chart values when hovering a chart', async () => {
         render(<App/>);
 
@@ -604,7 +757,7 @@ describe('App layout navigation', () => {
         });
 
         expect(screen.getByRole('button', {name: '进程'})).toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: '设置'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: '设置'})).not.toBeInTheDocument();
         expect(screen.getByLabelText('语言')).toHaveValue('zh');
     });
 
@@ -1019,7 +1172,7 @@ describe('App layout navigation', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Cleanup'}));
 
         expect(await screen.findByText('node.exe')).toBeInTheDocument();
-        expect(screen.queryByRole('heading', {name: 'Cleanup'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Cleanup'})).not.toBeInTheDocument();
         expect(screen.getByRole('toolbar', {name: 'Cleanup actions'})).toHaveClass('cleanup-toolbar');
         expect(screen.getByText('Development process candidates')).toBeInTheDocument();
         expect(screen.getByText('Selected')).toBeInTheDocument();
@@ -1075,6 +1228,7 @@ describe('App layout navigation', () => {
             'Memory',
             'Ports',
             'Protected',
+            'App / project',
             'Path',
             'Command',
         ]);
@@ -1090,6 +1244,7 @@ describe('App layout navigation', () => {
             'CPU',
             'Memory',
             'Protected',
+            'App / project',
             'Path',
             'Command',
         ]);
@@ -1109,6 +1264,108 @@ describe('App layout navigation', () => {
             'Reason',
             'Actions',
         ]);
+    });
+
+    it('groups both pages consistently and opens a project without retaining unrelated filters', async () => {
+        const projectPath = 'D:\\Projects\\Alpha';
+        getProcessListMock.mockResolvedValue(processRows.map(process => process.pid === 100
+            ? {...process, projectName: 'Alpha', projectPath, projectReason: 'directory'} : process));
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Ports'}));
+        await screen.findByRole('table', {name: 'Port list'});
+        fireEvent.change(screen.getByLabelText('Port'), {target: {value: '5432'}});
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        const processesTable = await screen.findByRole('table', {name: 'Process list'});
+        fireEvent.click(screen.getByRole('button', {name: 'Apps & projects'}));
+        const heading = within(processesTable).getByRole('button', {name: /Alpha/});
+        fireEvent.click(heading);
+        expect(within(processesTable).queryByText('node.exe')).not.toBeInTheDocument();
+        fireEvent.click(heading);
+        expect(within(processesTable).getByText('node.exe')).toBeInTheDocument();
+        fireEvent.click(within(heading.closest('tr')!).getByRole('button', {name: 'View ports'}));
+        const portsTable = await screen.findByRole('table', {name: 'Port list'});
+        await waitFor(() => expect(within(portsTable).getByText('3000')).toBeInTheDocument());
+        expect(within(portsTable).queryByText('5432')).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Port')).toHaveValue('');
+        expect(screen.getByRole('combobox', {name: 'App or project filter'})).toHaveValue('d:/projects/alpha');
+        expect(within(portsTable).getByRole('button', {name: /Alpha/}).closest('tr')).toHaveTextContent('1 processes · 512.0 MB');
+        fireEvent.click(screen.getByRole('button', {name: 'View processes'}));
+        await screen.findByRole('table', {name: 'Process list'});
+        expect(screen.getByRole('combobox', {name: 'App or project filter'})).toHaveValue('d:/projects/alpha');
+        expect(window.localStorage.getItem('openend-ports-project-view')).toBe('grouped');
+    });
+
+    it('shows app and project groups together and filters app ports using the same executable identity', async () => {
+        const appPath = 'C:\\Apps\\Browser\\chrome.exe';
+        getProcessListMock.mockResolvedValue(processRows.map(process => {
+            if (process.pid === 600) return {...process, applicationName: 'Google Chrome', applicationPath: appPath, applicationReason: 'applicationPath'};
+            if (process.pid === 100) return {...process, projectName: 'Alpha', projectPath: 'D:\\Projects\\Alpha'};
+            return process;
+        }));
+        getPortListMock.mockResolvedValue([...portRows, {...portRows[0], pid: 600, port: 9222, processName: 'chrome.exe'}]);
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        const processTable = await screen.findByRole('table', {name: 'Process list'});
+        fireEvent.click(screen.getByRole('button', {name: 'Apps & projects'}));
+        const appHeading = within(processTable).getByRole('button', {name: /Google Chrome/});
+        expect(appHeading).toHaveTextContent('App');
+        expect(within(processTable).getByRole('button', {name: /Alpha/})).toHaveTextContent('Project');
+        fireEvent.click(within(appHeading.closest('tr')!).getByRole('button', {name: 'View ports'}));
+        const portsTable = await screen.findByRole('table', {name: 'Port list'});
+        await waitFor(() => expect(within(portsTable).getByText('9222')).toBeInTheDocument());
+        expect(within(portsTable).queryByText('3000')).not.toBeInTheDocument();
+        expect(screen.getByRole('combobox', {name: 'App or project filter'})).toHaveValue('app:c:/apps/browser/chrome.exe');
+        expect(within(portsTable).getByRole('button', {name: /Google Chrome/})).toHaveTextContent('App');
+        fireEvent.click(screen.getByRole('button', {name: 'View processes'}));
+        const filteredProcesses = await screen.findByRole('table', {name: 'Process list'});
+        expect(within(filteredProcesses).getByText('chrome.exe', {selector: '.process-name-text'})).toBeInTheDocument();
+        expect(within(filteredProcesses).queryByText('node.exe')).not.toBeInTheDocument();
+    });
+
+    it('can exclude an app process and restore its automatic application assignment', async () => {
+        const app = {...processRows[4], applicationName: 'Google Chrome', applicationPath: processRows[4].path, applicationReason: 'applicationPath', projectReason: ''};
+        let currentRows = [app];
+        getProcessListMock.mockImplementation(async () => currentRows);
+        getProcessDetailMock.mockResolvedValue({...nodeProcessDetail, pid: app.pid, processName: app.name});
+        setProcessProjectMock.mockImplementation(async (_pid: number, _createdAt: number, _path: string, _remember: boolean, reset: boolean) => {
+            currentRows = [reset ? app : {...app, applicationName: '', applicationPath: '', applicationReason: '', projectReason: 'manual'}];
+        });
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        const table = await screen.findByRole('table', {name: 'Process list'});
+        fireEvent.click(within(table).getByText('chrome.exe', {selector: '.process-name-text'}));
+        const detail = await screen.findByRole('complementary', {name: 'Process detail'});
+        fireEvent.click(await within(detail).findByText('Change assignment'));
+        fireEvent.click(within(detail).getByRole('button', {name: 'Remove from group'}));
+        await waitFor(() => expect(within(table).getByText('Unidentified')).toBeInTheDocument());
+        expect(setProcessProjectMock).toHaveBeenCalledWith(app.pid, app.createdAt, '', false, false);
+        fireEvent.click(within(detail).getByRole('button', {name: 'Restore automatic assignment'}));
+        await waitFor(() => expect(within(table).getByText('Google Chrome')).toBeInTheDocument());
+        expect(setProcessProjectMock).toHaveBeenLastCalledWith(app.pid, app.createdAt, '', false, true);
+    });
+
+    it('updates assignment from a port detail and refreshes the process view when revisited', async () => {
+        const projectPath = 'D:\\Projects\\Beta';
+        let currentRows = processRows.map(process => ({...process, workingDirectory: 'D:\\Projects\\Alpha', projectName: 'Alpha', projectPath: 'D:\\Projects\\Alpha'}));
+        getProcessListMock.mockImplementation(async () => currentRows);
+        setProcessProjectMock.mockImplementation(async (pid: number, _createdAt: number, path: string) => {
+            currentRows = currentRows.map(process => process.pid === pid ? {...process, projectName: 'Beta', projectPath: path} : process);
+        });
+        render(<App/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        await screen.findByRole('table', {name: 'Process list'});
+        fireEvent.click(screen.getByRole('button', {name: 'Ports'}));
+        const portsTable = await screen.findByRole('table', {name: 'Port list'});
+        fireEvent.click(within(portsTable).getByText('3000'));
+        const detail = screen.getByRole('complementary', {name: /Port detail/i});
+        fireEvent.click(within(detail).getByText('Change assignment'));
+        fireEvent.change(within(detail).getByLabelText('Project directory'), {target: {value: projectPath}});
+        fireEvent.click(within(detail).getByRole('button', {name: 'Save assignment'}));
+        await waitFor(() => expect(setProcessProjectMock).toHaveBeenCalledWith(100, 1000, projectPath, false, false));
+        await waitFor(() => expect(within(portsTable).getByText('3000').closest('tr')).toHaveTextContent('Beta'));
+        fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
+        const processesTable = await screen.findByRole('table', {name: 'Process list'});
+        await waitFor(() => expect(within(processesTable).getByText('node.exe').closest('tr')).toHaveTextContent('Beta'));
     });
 
     it('renders bottom horizontal scrollbars for process data tables', async () => {
@@ -1291,7 +1548,7 @@ describe('App layout navigation', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Logs'}));
 
         await act(async () => {});
-        expect(screen.queryByRole('heading', {name: 'Logs'})).toBeInTheDocument();
+        expect(screen.queryByRole('heading', {name: 'Logs'})).not.toBeInTheDocument();
         expect(screen.getByText('No operation logs found.')).toBeInTheDocument();
         expect(screen.queryByRole('button', {name: 'Refresh Logs'})).not.toBeInTheDocument();
 
@@ -1361,7 +1618,7 @@ describe('App layout navigation', () => {
         await waitFor(() => expect(within(table).queryByText('node.exe')).not.toBeInTheDocument());
     });
 
-    it('keeps updating and preserves filters sorting and graph history across navigation', async () => {
+    it('keeps Performance updating in the background and preserves filters sorting and graph history across navigation', async () => {
         vi.useFakeTimers();
         render(<App/>);
         await act(async () => {});
@@ -1376,15 +1633,16 @@ describe('App layout navigation', () => {
         const calls = getProcessListMock.mock.calls.length;
         await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
         expect(getProcessListMock).toHaveBeenCalledTimes(calls + 2);
-        expect(getSystemResourceInfoMock).toHaveBeenCalledTimes(dashboardCalls);
+        expect(getSystemResourceInfoMock).toHaveBeenCalledTimes(dashboardCalls + 10);
         fireEvent.click(screen.getByRole('button', {name: 'Performance'}));
         await act(async () => {});
         const retainedPoints = screen.getByLabelText('CPU usage chart').querySelector('polyline')!.getAttribute('points')!.split(' ');
-        expect(retainedPoints).toHaveLength(points.length + 1);
+        expect(retainedPoints).toHaveLength(points.length + 10);
         fireEvent.click(screen.getByRole('button', {name: 'Processes'}));
         expect(screen.getByLabelText('Process name')).toHaveValue('node');
         expect(screen.getByRole('button', {name: 'CPU'})).toHaveAttribute('aria-pressed', 'true');
         expect(screen.queryByRole('button', {name: /Pause refresh|Resume refresh/})).not.toBeInTheDocument();
+        await act(async () => {});
     });
 
     it('retains process rows and the last successful update time after refresh failure', async () => {
@@ -1419,6 +1677,34 @@ describe('App layout navigation', () => {
         const points = screen.getByLabelText('CPU usage chart').querySelector('polyline')!.getAttribute('points')!.split(' ');
         expect(points).toHaveLength(1);
         expect(screen.getByRole('alert')).toHaveTextContent('Denied');
+    });
+
+    it('separates a stale thread count from its status and recovers on the next successful sample', async () => {
+        vi.useFakeTimers();
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({threadCount: 11845, metrics: {
+            threads: {state: 'ready', updatedAt: 1000, error: ''},
+        }}));
+        render(<App/>);
+        await act(async () => {});
+        const value = screen.getByText('Threads').nextElementSibling!;
+        expect(value).toHaveTextContent('11,845');
+
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({threadCount: 0, metrics: {
+            threads: {state: 'unavailable', updatedAt: 0, error: 'Snapshot unavailable'},
+        }}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        const status = within(value as HTMLElement).getByText(/Last known value/);
+        expect(value.firstChild?.textContent).toBe('11,845');
+        expect(status.tagName).toBe('SMALL');
+        expect(status).toHaveClass('resource-metric-status');
+        expect(status).toHaveAttribute('title', 'Snapshot unavailable');
+
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({threadCount: 12000, metrics: {
+            threads: {state: 'ready', updatedAt: 3000, error: ''},
+        }}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        expect(value).toHaveTextContent('12,000');
+        expect(within(value as HTMLElement).queryByText(/Last known value/)).not.toBeInTheDocument();
     });
 
     it('shows mixed batch results as a partial success with failure details', async () => {

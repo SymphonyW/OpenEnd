@@ -4,8 +4,14 @@ export const PageActivityContext = createContext(true);
 
 export type AutoRefreshLoader = (showLoading?: boolean) => Promise<void> | void;
 
-export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: number) {
-    const active = useContext(PageActivityContext);
+interface AutoRefreshOptions {
+    refreshEvent?: string;
+    runInBackground?: boolean;
+}
+
+export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: number, {refreshEvent, runInBackground = false}: AutoRefreshOptions = {}) {
+    const pageActive = useContext(PageActivityContext);
+    const active = runInBackground || pageActive;
     const loaderRef = useRef(loader);
     const activeRefreshRef = useRef<Promise<void> | null>(null);
 
@@ -26,7 +32,7 @@ export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: 
         };
 
         const scheduleNextRefresh = () => {
-            if (isDisposed || document.visibilityState === 'hidden') {
+            if (isDisposed || (!runInBackground && document.visibilityState === 'hidden')) {
                 return;
             }
 
@@ -38,7 +44,7 @@ export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: 
         };
 
         const runRefresh = async (showLoading: boolean) => {
-            if (isDisposed || document.visibilityState === 'hidden') {
+            if (isDisposed || (!runInBackground && document.visibilityState === 'hidden')) {
                 return;
             }
 
@@ -66,6 +72,7 @@ export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: 
         };
 
         const handleVisibilityChange = () => {
+            if (runInBackground) return;
             clearScheduledRefresh();
             if (document.visibilityState !== 'visible') {
                 return;
@@ -75,12 +82,19 @@ export function useSequentialAutoRefresh(loader: AutoRefreshLoader, intervalMs: 
         };
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
+        const handleRequestedRefresh = async () => {
+            if (activeRefreshRef.current) await activeRefreshRef.current;
+            clearScheduledRefresh();
+            void runRefresh(false);
+        };
+        if (refreshEvent) window.addEventListener(refreshEvent, handleRequestedRefresh);
         void runRefresh(true);
 
         return () => {
             isDisposed = true;
             clearScheduledRefresh();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (refreshEvent) window.removeEventListener(refreshEvent, handleRequestedRefresh);
         };
-    }, [intervalMs, active]);
+    }, [intervalMs, active, refreshEvent, runInBackground]);
 }

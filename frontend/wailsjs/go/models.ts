@@ -304,6 +304,26 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class UpdateInfo {
+	    currentVersion: string;
+	    latestVersion: string;
+	    available: boolean;
+	    downloadURL: string;
+	    releaseNotes: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.available = source["available"];
+	        this.downloadURL = source["downloadURL"];
+	        this.releaseNotes = source["releaseNotes"];
+	    }
+	}
 
 }
 
@@ -341,6 +361,16 @@ export namespace port {
 export namespace process {
 	
 	export class Info {
+	    parentPID: number;
+	    workingDirectory: string;
+	    workingDirectoryError: string;
+	    projectPath: string;
+	    projectName: string;
+	    projectReason: string;
+	    projectRuleSource: string;
+	    applicationPath: string;
+	    applicationName: string;
+	    applicationReason: string;
 	    createdAt: number;
 	    pid: number;
 	    name: string;
@@ -358,6 +388,16 @@ export namespace process {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.parentPID = source["parentPID"];
+	        this.workingDirectory = source["workingDirectory"];
+	        this.workingDirectoryError = source["workingDirectoryError"];
+	        this.projectPath = source["projectPath"];
+	        this.projectName = source["projectName"];
+	        this.projectReason = source["projectReason"];
+	        this.projectRuleSource = source["projectRuleSource"];
+	        this.applicationPath = source["applicationPath"];
+	        this.applicationName = source["applicationName"];
+	        this.applicationReason = source["applicationReason"];
 	        this.createdAt = source["createdAt"];
 	        this.pid = source["pid"];
 	        this.name = source["name"];

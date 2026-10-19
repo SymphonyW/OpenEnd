@@ -207,6 +207,9 @@ func (s *Store) initialize(ctx context.Context) error {
 	if err := s.validate(); err != nil {
 		return err
 	}
+	if _, err := s.db.ExecContext(ctx, createProjectRulesTableSQL); err != nil {
+		return fmt.Errorf("initialize project rules: %w", err)
+	}
 	if _, err := s.db.ExecContext(ctx, createCustomProtectedProcessesTableSQL); err != nil {
 		return fmt.Errorf("initialize configuration database: %w", err)
 	}

@@ -12,6 +12,7 @@ import (
 	processdetail "openend/internal/detail"
 	portscanner "openend/internal/port"
 	processscanner "openend/internal/process"
+	"openend/internal/project"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
@@ -44,7 +45,9 @@ type SystemResourceInfo struct {
 
 // App struct
 type App struct {
-	ctx context.Context
+	ctx              context.Context
+	projectMu        sync.Mutex
+	projectOverrides map[project.Identity]string
 }
 
 // NewApp creates a new App application struct
@@ -287,30 +290,6 @@ func collectProcessCount() (int, error) {
 	return len(pids), nil
 }
 
-func collectThreadCount() (int, error) {
-	processes, err := gopsprocess.Processes()
-	if err != nil {
-		return 0, err
-	}
-
-	var threadCount int32
-	readable := 0
-	for _, process := range processes {
-		count, err := process.NumThreads()
-		if err == nil {
-			readable++
-			if count > 0 {
-				threadCount += count
-			}
-		}
-	}
-
-	if readable < len(processes) {
-		return 0, fmt.Errorf("thread counts readable for only %d/%d processes; try running as administrator", readable, len(processes))
-	}
-	return int(threadCount), nil
-}
-
 func collectPortCount() (int, error) {
 	connections, err := net.Connections("inet")
 	if err != nil {
@@ -349,7 +328,7 @@ func (a *App) GetProcessList() ([]processscanner.Info, error) {
 		return nil, err
 	}
 
-	return processes, nil
+	return a.assignProjects(ctx, processes)
 }
 
 // GetProcessDetail returns a single process detail view with ports and recent logs.

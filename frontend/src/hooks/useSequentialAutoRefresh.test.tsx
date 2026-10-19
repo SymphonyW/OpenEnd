@@ -82,6 +82,36 @@ describe('useSequentialAutoRefresh', () => {
         expect(vi.getTimerCount()).toBe(1);
     });
 
+    it('starts background polling while hidden and keeps one schedule across page and visibility changes', async () => {
+        visibility = 'hidden';
+        let active = false;
+        const pending = deferredRefresh();
+        const loader = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(undefined);
+        const wrapper = ({children}: {children: ReactNode}) => <PageActivityContext.Provider value={active}>{children}</PageActivityContext.Provider>;
+        const {rerender, unmount} = renderHook(() => useSequentialAutoRefresh(loader, 1000, {runInBackground: true}), {wrapper});
+        expect(loader).toHaveBeenCalledTimes(1);
+        await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+        expect(loader).toHaveBeenCalledTimes(1);
+
+        active = true;
+        rerender();
+        await setVisibility('visible');
+        await act(async () => { pending.resolve(); });
+        expect(loader).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(1);
+
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        expect(loader).toHaveBeenCalledTimes(2);
+        active = false;
+        rerender();
+        await setVisibility('hidden');
+        await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+        expect(loader).toHaveBeenCalledTimes(4);
+        expect(vi.getTimerCount()).toBe(1);
+        unmount();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('waits for completion before scheduling and remains idle if hidden during a request', async () => {
         const pending = deferredRefresh();
         const loader = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(undefined);
@@ -168,6 +198,18 @@ describe('useSequentialAutoRefresh', () => {
         expect(vi.getTimerCount()).toBe(1);
         unmount();
         expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('refreshes after a project edit without overlapping an in-flight scan', async () => {
+        const pending = deferredRefresh();
+        const loader = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(undefined);
+        renderHook(() => useSequentialAutoRefresh(loader, 5000, {refreshEvent: 'projects-edited'}));
+        act(() => { window.dispatchEvent(new Event('projects-edited')); });
+        expect(loader).toHaveBeenCalledTimes(1);
+        await act(async () => { pending.resolve(); });
+        expect(loader).toHaveBeenCalledTimes(2);
+        expect(loader).toHaveBeenLastCalledWith(false);
+        expect(vi.getTimerCount()).toBe(1);
     });
 
     it('reports loader failures and continues polling without an unhandled rejection', async () => {
