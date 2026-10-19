@@ -1,6 +1,6 @@
 # OpenEnd 技术设计与实现
 
-> 文档基线：OpenEnd 2.1.2，源码检查日期 2026-10-03。本文描述当前仓库的实际实现，而不是规划中的功能。OpenEnd 是本地桌面应用；除“反馈”页通过系统邮件客户端打开 `mailto:` 链接外，核心进程、端口、资源、设置与日志能力都在本机完成。
+> 文档主体基线：OpenEnd 2.1.2，源码检查日期 2026-10-03；系统资源采集章节已按 2.2.0 修复实现更新（2026-10-19）。本文描述对应版本的实际实现。OpenEnd 是本地桌面应用，核心进程、端口、资源、设置与日志能力都在本机完成。
 
 ## 1. 系统边界与总体架构
 
@@ -13,7 +13,7 @@ OpenEnd 面向 Windows 开发环境诊断，回答三个核心问题：哪些进
 | 应用桥接层 | `app.go` | Wails RPC 门面；装配保护规则、系统采集器、SQLite 与领域模块 |
 | 领域/系统层 | `internal/process`、`port`、`detail`、`resource` | 进程与端口扫描、结束操作、详情聚合、GPU/VRAM 采集 |
 | 本地持久化 | `internal/config` + modernc SQLite | 保护进程、清理规则、操作日志 |
-| 操作系统接口 | gopsutil、WMI、Windows Registry、Win32 API | 读取资源与进程信息、提取图标、结束进程 |
+| 操作系统接口 | gopsutil、Windows Registry、Win32 API、PDH | 读取资源与进程信息、提取图标、结束进程 |
 | 构建发布 | Wails CLI + PowerShell + NSIS | 生成 Windows 可执行文件与未签名安装包 |
 
 ```mermaid
@@ -33,7 +33,7 @@ flowchart LR
     PORT --> GOP
     DETAIL --> GOP
     RES --> GOP
-    RES --> WMI[WMI / 注册表]
+    RES --> WMI[PDH / 注册表]
     PROC --> WIN[Win32 Shell / GDI API]
     CFG --> DB[(settings.sqlite3)]
 
@@ -51,11 +51,11 @@ flowchart LR
 | `main.go` | Wails 窗口、静态资源、生命周期与绑定注册 | 依赖 `App` 与 Wails |
 | `app.go` | 所有前端可调用方法、资源采集编排、日志写入 | 依赖全部 `internal` 模块 |
 | `resource_async.go` | 一次性缓存与异步定时缓存 | 被 `app.go` 使用 |
-| `cpu_model_windows.go` | CPU 型号的注册表回退读取 | 被资源采集使用 |
+| `cpu_model_windows.go` | CPU 型号、核心数和基准频率的原生读取 | 被资源采集使用 |
 | `internal/process` | 进程列表、CPU 差分采样、保护判断、图标、结束进程 | 依赖 `config`、gopsutil、Win32 API |
 | `internal/port` | TCP/UDP 表扫描、进程关联、按端口结束 | 依赖 `process`、`config`、gopsutil |
 | `internal/detail` | 单进程快照、端口与日志聚合、开发进程识别 | 依赖 `process`、`port`、`config` |
-| `internal/resource` | GPU 使用率、显存、显卡名 | 依赖 WMI 与注册表 |
+| `internal/resource` | GPU 使用率、显存、显卡名 | 依赖 PDH 与注册表 |
 | `internal/config` | SQLite schema、保护规则、Cleanup 规则、操作日志 | 底层持久化模块 |
 | `frontend/src/services` | 对生成绑定的薄封装及纯前端规则算法 | 被页面调用 |
 | `frontend/src/pages` | 七个页面的状态与交互 | 依赖 services、hooks、components |
@@ -131,24 +131,24 @@ sequenceDiagram
 
 ### 系统资源采集与缓存
 
-`SystemResourceInfo` 同时包含 CPU、内存、GPU、显存、进程数、线程数、占用端口数和系统运行时间。`collectSystemResourceInfo` 为 8 个采集器分别启动 goroutine，用 `sync.WaitGroup` 等待后组装快照，从而把总延迟控制在最慢的同步采集器附近，而不是各采集器耗时之和。
+`SystemResourceInfo` 同时包含 CPU、内存、GPU、显存、进程数、线程数、占用端口数和系统运行时间。`collectSystemResourceInfo` 读取 8 个采集器各自的缓存和状态后组装快照。所有实际采集均在后台执行，首屏不等待任何硬件查询。Windows CPU 静态信息和 GPU/显存采集绕开 WMI，避免 WMI 查询超时或其共享锁卡住多个指标。
 
 | 字段 | 数据源 | 执行/缓存策略 | 失败值 |
 | --- | --- | --- | --- |
-| CPU 使用率 | `gopsutil/cpu.Percent(0, false)` | 每次同步采集，保留 1 位小数 | `0` |
-| CPU 型号/核数/频率 | `cpu.Info`、`cpu.Counts`；型号回退到注册表，Windows 频率/物理核数回退到仅查询必需字段的 WMI | 首次同步采集，字段完整后进程期内缓存；不完整时下次请求重试 | 空字符串或 `0`，采集错误写入日志 |
-| 内存 | `mem.VirtualMemory` | 每次同步采集；可用内存取 `Available` | 全部 `0` |
-| GPU 使用率/已用显存/名称 | WMI 性能计数器与控制器 | 后台刷新，最短间隔 5 秒 | 缓存值或零值 |
-| 总显存 | 显卡注册表，失败后 WMI `AdapterRAM` | 首个正值进程期内缓存 | `0` |
-| 进程数 | `process.Pids` | 每次同步采集 | `0` |
-| 线程数 | 遍历进程并累加 `NumThreads` | 后台刷新，最短间隔 5 秒 | 缓存值或 `0` |
-| 端口数 | `net.Connections("inet")` 后按本地端口号去重 | 后台刷新，最短间隔 10 秒 | 缓存值或 `0` |
-| 运行时间 | `host.Uptime` | 每次同步采集 | `0` |
+| CPU 使用率 | `gopsutil/cpu.Percent(0, false)` | 后台采集，保留 1 位小数 | 保留上次值，标记状态 |
+| CPU 型号/核数/频率 | 注册表、`GetLogicalProcessorInformationEx`、`GetActiveProcessorCount`、`CallNtPowerInformation` | 后台采集，字段完整后缓存；不完整时最短间隔 5 秒重试 | 已取得的字段或不可用 |
+| 内存 | `mem.VirtualMemory` | 后台采集；可用内存取 `Available` | 保留上次值，标记状态 |
+| GPU 使用率/已用显存 | PDH 原生性能计数器 | 后台刷新，最短间隔 5 秒；首次取两个样本，后续复用查询 | 保留上次值，标记状态 |
+| 显卡名/总显存 | 显卡注册表 | 与 GPU 后台采集一起读取，独立于使用率计数器状态展示 | 已取得的元数据或不可用 |
+| 进程数 | `process.Pids` | 后台采集 | 保留上次值，标记状态 |
+| 线程数 | 单次 Windows 进程快照中累加线程数 | 后台刷新，最短间隔 5 秒 | 保留上次值，标记状态 |
+| 端口数 | `net.Connections("inet")` 后按本地端口号去重 | 后台刷新，最短间隔 10 秒 | 保留上次值，标记状态 |
+| 运行时间 | `host.Uptime` | 后台采集 | 保留上次值，标记状态 |
 
-这里有两种泛型缓存：
+所有指标共用 `resourceCollector[T]`：
 
-- `cachedResourceCollector[T]` 在第一次 `Get()` 时同步执行，通过可选的 `valid` 检查后永久返回缓存值。CPU 静态信息要求型号、频率、物理核数和逻辑处理器数全部有效；不完整时返回已取得的字段，下次 `Get()` 重试。
-- `asyncCachedCollector[T]` 在满足最短刷新间隔且没有在途任务时启动后台 goroutine，当前调用立即返回上一份缓存；还没有缓存时返回类型零值。GPU、线程数和端口数使用此策略。
+- `Get()` 在满足最短间隔且没有在途任务时启动后台 goroutine，立即返回缓存和状态；还没有数据时标记为 `collecting`，界面不把类型零值当成真实读数。
+- CPU 静态信息通过 `cacheValid` 检查后停止重复查询。其他指标按各自间隔刷新，失败时保留上次有效值和时间。
 
 ```mermaid
 stateDiagram-v2
@@ -162,15 +162,17 @@ stateDiagram-v2
     Refreshing --> Cached: 刷新期间继续返回旧值
 ```
 
-`inFlight` 保证同一采集器只有一个后台任务，互斥锁保护缓存、开始时间和状态。`runResourceCollector` 会恢复采集器 panic，失败值不会覆盖已有缓存。代价是首次打开性能页时，异步字段可能短暂显示为 0；下一次前端刷新会读取后台完成后的值。
+`inFlight` 保证同一采集器只有一个后台任务，互斥锁保护缓存、开始时间和状态。`safeCollect` 恢复采集器 panic。查询超过 10 秒时，该指标显示超时；没有有效旧值时为 `unavailable`，已有旧值时为 `stale`。超时不创建重复任务；原查询结束后可以恢复，其他指标继续刷新。
 
 GPU 的实现是“尽力而为”：
 
-- 查询 `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine`，累加所有引擎的 `UtilizationPercentage` 后夹在 0–100。
-- 查询 `GPUAdapterMemory`，累加各项 `DedicatedUsage` 作为已用显存。`SharedUsage` 与 `TotalCommitted` 当前只进入结构体，没有参与界面值计算。
-- 显卡名称来自 `Win32_VideoController`，去空、去重但保持发现顺序。
-- 总显存先遍历显示适配器注册表类下 `0000`–`0099` 的 `HardwareInformation.qwMemorySize`，没有结果再累加 WMI `AdapterRAM`。
+- 使用 `PdhAddEnglishCounterW` 和 `PdhGetFormattedCounterArrayW` 读取 `GPU Engine(*)\Utilization Percentage`，累加有效实例的小数使用率后夹在 0–100；跳过进程退出造成的无效实例。
+- 读取 `GPU Adapter Memory(*)\Dedicated Usage`，累加专用显存占用。GPU 使用率与显存计数器分别保留错误，不用真实的零使用率代替采集失败。
+- 型号来自显示适配器注册表的 `DriverDesc`；忽略没有专用显存的 Root 虚拟显示驱动，去空、去重并保留发现顺序。
+- 总显存读取显示适配器注册表类下 `0000`–`0099` 的 `HardwareInformation.qwMemorySize` 或 `HardwareInformation.MemorySize`。使用率失败时，已读取的型号和总显存仍然显示。
 - 可用显存只在 `total > used` 时计算为差值；若驱动计数导致已用值超过总值，则为 0，不会发生无符号下溢。
+
+接口依据：[CPU 拓扑](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getlogicalprocessorinformationex)、[CPU 频率](https://learn.microsoft.com/en-us/windows/win32/api/powerbase/nf-powerbase-callntpowerinformation)、[性能计数器数组](https://learn.microsoft.com/en-us/windows/win32/api/pdh/nf-pdh-pdhgetformattedcounterarrayw)。在具备 GPU 的 Windows 本机设置 `OPENEND_HARDWARE_SMOKE=1`，运行 `go test -run TestNativeHardwareSnapshot -count=1 -v .`，可验证真实硬件信息和连续三轮 GPU 刷新；普通测试不依赖 CI 是否配有 GPU。
 
 ### 进程模块
 
@@ -627,7 +629,7 @@ sequenceDiagram
 | PID/端口结束 | gopsutil kill + Windows 权限识别 | 返回失败 `OperationResult` |
 | 进程详情 | gopsutil + 图标 | 返回 unsupported error |
 | 图标 | Shell/User/GDI API | 空字符串 |
-| GPU | WMI + 注册表 | 全零 `GPUInfo` |
+| GPU | PDH + 注册表 | 不可用状态及明确错误 |
 | SQLite 配置 | 可用 | 代码可运行，但默认规则明显面向 Windows |
 
 因此项目虽然部分包可跨平台编译，当前产品能力和发布链仍以 Windows 10/11 为目标。
@@ -643,7 +645,7 @@ sequenceDiagram
 | `internal/process/*_test.go` | CPU 差分、保护规则、结束分支、当前进程扫描 | 通过 |
 | `internal/port/*_test.go` | 临时 TCP/UDP listener、按端口结束分支 | 通过 |
 | `internal/detail/process_detail_test.go` | 聚合、端口排序、错误保留、开发进程识别 | 通过 |
-| `internal/resource/gpu_test.go` | GPU 聚合、显存计算与成功缓存 | 通过 |
+| `internal/resource/gpu_test.go`、`gpu_pdh_windows_test.go` | GPU 聚合、显存计算与原生计数器接口契约 | 通过 |
 | `App.test.tsx` | 七页关键交互、筛选、确认、刷新、错误状态 | 36 项通过 |
 | `useSequentialAutoRefresh.test.tsx` | 可见性、StrictMode、顺序执行、异常恢复 | 9 项通过 |
 | `cleanup.test.ts` | 四类规则匹配、保护排除、排序与原因 | 1 项通过 |

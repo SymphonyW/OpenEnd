@@ -46,7 +46,11 @@ export function mergeResourceInfo(previous: SystemResourceInfo | null, next: Sys
         const status = resourceStatus(next, key);
         const old = previous ? resourceStatus(previous, key) : null;
         if (status.state !== 'ready' && previous && old && (old.state === 'ready' || old.state === 'stale')) {
-            for (const field of metricFields[key]) Object.assign(merged, {[field]: previous[field]});
+            for (const field of metricFields[key]) {
+                if (field === 'gpuNames' && next.gpuNames?.length) continue;
+                if (field === 'totalVRAMBytes' && next.totalVRAMBytes > 0) continue;
+                Object.assign(merged, {[field]: previous[field]});
+            }
             (merged.metrics ??= {})[key] = {...status, state: 'stale', updatedAt: old.updatedAt};
         }
     }

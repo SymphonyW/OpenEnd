@@ -1658,6 +1658,48 @@ describe('App layout navigation', () => {
         expect(screen.getByText(/Last updated:/).textContent).toBe(timestamp);
     });
 
+    it('renders Performance before the first samples finish and keeps it usable when hardware information times out', async () => {
+        vi.useFakeTimers();
+        const collecting = {state: 'collecting' as const, updatedAt: 0, error: ''};
+        getSystemResourceInfoMock.mockResolvedValueOnce(makeSystemResourceInfo({cpuName: '', cpuPercent: 0, metrics: {
+            cpu: collecting, cpuInfo: collecting, memory: collecting, gpu: collecting, vram: collecting,
+            processes: collecting, threads: collecting, ports: collecting, uptime: collecting,
+        }}));
+        render(<App/>);
+        await act(async () => {});
+        expect(screen.getByLabelText('CPU usage chart')).toBeInTheDocument();
+        expect(screen.queryByText('Loading resource snapshot...')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', {name: 'CPU'})).toHaveTextContent('Collecting');
+
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({cpuName: '', cpuPercent: 24, metrics: {
+            cpu: {state: 'ready', updatedAt: 1000, error: ''},
+            memory: {state: 'ready', updatedAt: 1000, error: ''},
+            cpuInfo: {state: 'unavailable', updatedAt: 0, error: 'Hardware query timed out'},
+            gpu: collecting, vram: collecting,
+        }}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        expect(screen.getByRole('button', {name: 'CPU'})).toHaveTextContent('24.0%');
+        expect(screen.getByRole('button', {name: 'Memory'})).not.toHaveTextContent('Unavailable');
+        expect(screen.getByText('Base speed').nextElementSibling).toHaveTextContent('Unavailable');
+        expect(screen.getByLabelText('CPU usage chart')).toBeInTheDocument();
+    });
+
+    it('keeps GPU model and total VRAM visible independently of usage counter failures', async () => {
+        vi.useFakeTimers();
+        const ready = {state: 'ready' as const, updatedAt: 1000, error: ''};
+        getSystemResourceInfoMock.mockResolvedValueOnce(makeSystemResourceInfo({gpuNames: ['Old GPU'], totalVRAMBytes: 8 * 1024 ** 3, metrics: {gpu: ready, vram: ready}}));
+        render(<App/>);
+        await act(async () => {});
+        fireEvent.click(screen.getByRole('button', {name: 'GPU'}));
+
+        const unavailable = {state: 'unavailable' as const, updatedAt: 0, error: 'Counter unavailable'};
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({gpuNames: ['Native GPU'], totalVRAMBytes: 16 * 1024 ** 3, metrics: {gpu: unavailable, vram: unavailable}}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        expect(screen.getByText('GPU model').nextElementSibling).toHaveTextContent('Native GPU');
+        expect(screen.getByText('Total VRAM').nextElementSibling).toHaveTextContent('16.0 GB');
+        expect(screen.getByRole('alert')).toHaveTextContent('Counter unavailable');
+    });
+
     it('distinguishes pending unavailable true zero and stale metric readings without charting failed zeroes', async () => {
         vi.useFakeTimers();
         getSystemResourceInfoMock.mockResolvedValueOnce(makeSystemResourceInfo({cpuPercent: 0, gpuPercent: 0, metrics: {
