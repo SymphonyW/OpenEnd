@@ -1679,6 +1679,34 @@ describe('App layout navigation', () => {
         expect(screen.getByRole('alert')).toHaveTextContent('Denied');
     });
 
+    it('separates a stale thread count from its status and recovers on the next successful sample', async () => {
+        vi.useFakeTimers();
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({threadCount: 11845, metrics: {
+            threads: {state: 'ready', updatedAt: 1000, error: ''},
+        }}));
+        render(<App/>);
+        await act(async () => {});
+        const value = screen.getByText('Threads').nextElementSibling!;
+        expect(value).toHaveTextContent('11,845');
+
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({threadCount: 0, metrics: {
+            threads: {state: 'unavailable', updatedAt: 0, error: 'Snapshot unavailable'},
+        }}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        const status = within(value as HTMLElement).getByText(/Last known value/);
+        expect(value.firstChild?.textContent).toBe('11,845');
+        expect(status.tagName).toBe('SMALL');
+        expect(status).toHaveClass('resource-metric-status');
+        expect(status).toHaveAttribute('title', 'Snapshot unavailable');
+
+        getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo({threadCount: 12000, metrics: {
+            threads: {state: 'ready', updatedAt: 3000, error: ''},
+        }}));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        expect(value).toHaveTextContent('12,000');
+        expect(within(value as HTMLElement).queryByText(/Last known value/)).not.toBeInTheDocument();
+    });
+
     it('shows mixed batch results as a partial success with failure details', async () => {
         killProcessByPIDMock.mockResolvedValueOnce({success: true, message: 'ended'}).mockResolvedValueOnce({success: false, code: 'permission_denied', message: 'Permission denied'});
         render(<App/>);

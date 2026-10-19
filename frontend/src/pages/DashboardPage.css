@@ -26,6 +26,7 @@
 .performance-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 24px 28px; margin: 26px 0 0; }
 .performance-metrics dt { color: var(--text-muted); font-size: 12px; margin-bottom: 7px; }
 .performance-metrics dd { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 400; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.resource-metric-status { display: block; margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .resource-updated-at { margin: 30px 0 0; color: var(--text-soft); font-size: 11px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 1100px) {

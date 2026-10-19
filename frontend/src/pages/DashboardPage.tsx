@@ -1,5 +1,5 @@
 import {useCallback, useRef, useState} from 'react';
-import type {MouseEvent} from 'react';
+import type {MouseEvent, ReactNode} from 'react';
 import StatusMessage from '../components/StatusMessage';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {formatMemorySize, formatPercent, loadSystemResourceInfo, mergeResourceInfo, resourceStatus} from '../services/systemResources';
@@ -20,7 +20,7 @@ const ratio = (used: number, total: number) => total > 0 ? percent(used / total 
 
 interface Metric {
     label: string;
-    value: string;
+    value: ReactNode;
 }
 
 function graphPoints(history: Sample[], key: ResourceKey) {
@@ -156,15 +156,15 @@ function DashboardPage({page, t}: Props) {
 function resourceUsage(info: SystemResourceInfo, key: ResourceKey): number {
     return key === 'cpu' ? info.cpuPercent : key === 'gpu' ? info.gpuPercent : key === 'memory' ? ratio(info.usedMemoryBytes, info.totalMemoryBytes) : ratio(info.usedVRAMBytes, info.totalVRAMBytes);
 }
-function metricValue(info: SystemResourceInfo, key: ResourceMetric, value: string, t: Translator): string {
+function metricValue(info: SystemResourceInfo, key: ResourceMetric, value: string, t: Translator): ReactNode {
     const status = resourceStatus(info, key);
     if (status.state === 'collecting') return t('resource.collecting');
     if (status.state === 'unavailable') return t('resource.unavailable');
     const time = status.updatedAt > 0 ? ' · ' + new Date(status.updatedAt).toLocaleTimeString() : '';
-    return status.state === 'stale' ? value + ' · ' + t('resource.stale') + time : value;
+    return status.state === 'stale' ? <>{value}<small className="resource-metric-status" title={status.error || undefined}>{t('resource.stale')}{time}</small></> : value;
 }
 
-function resourceSubtitle(info: SystemResourceInfo | null, key: ResourceKey, t: Translator): string {
+function resourceSubtitle(info: SystemResourceInfo | null, key: ResourceKey, t: Translator): ReactNode {
     if (!info) {
         return t('dashboard.autoRefresh');
     }
