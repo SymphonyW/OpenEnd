@@ -415,6 +415,49 @@ describe('App layout navigation', () => {
         expect(checkForUpdateMock).toHaveBeenCalledTimes(1);
     });
 
+    it('renders release notes as Markdown and opens their links in the system browser', async () => {
+        const changelogURL = 'https://github.com/SymphonyW/OpenEnd/compare/v2.2.0...v2.2.1';
+        checkForUpdateMock.mockResolvedValue({
+            currentVersion: '2.2.0', latestVersion: '2.2.1', available: true, downloadURL: 'https://github.com/SymphonyW/OpenEnd/releases',
+            releaseNotes: [
+                '## Fixes', '', '- **CPU** refresh', '  - Preserve `last value`', '',
+                '```powershell', 'Get-FileHash .\\installer.exe', '```', '',
+                '| Metric | Status |', '| --- | --- |', '| GPU | Fixed |', '',
+                '- [x] Verified', '', `[Full Changelog](${changelogURL})`,
+            ].join('\n'),
+        });
+        render(<App/>);
+        fireEvent.mouseEnter(await screen.findByRole('button', {name: 'Update'}));
+        const notes = screen.getByRole('tooltip');
+        expect(within(notes).getByRole('heading', {name: 'Fixes', level: 2})).toBeInTheDocument();
+        expect(within(notes).getByText('CPU').tagName).toBe('STRONG');
+        expect(within(notes).getByText('last value').tagName).toBe('CODE');
+        expect(within(notes).getByText('Get-FileHash .\\installer.exe').parentElement?.tagName).toBe('PRE');
+        expect(within(notes).getByRole('table')).toHaveTextContent('GPU');
+        expect(within(notes).getByRole('checkbox')).toBeChecked();
+        expect(within(notes).getByRole('checkbox')).toBeDisabled();
+        const changelog = within(notes).getByRole('link', {name: 'Full Changelog'});
+        expect(changelog).toHaveAttribute('href', changelogURL);
+        fireEvent.click(changelog);
+        expect(browserOpenURLMock).toHaveBeenCalledTimes(1);
+        expect(browserOpenURLMock).toHaveBeenCalledWith(changelogURL);
+    });
+
+    it('does not render raw HTML or open unsafe links from release notes', async () => {
+        checkForUpdateMock.mockResolvedValue({
+            currentVersion: '2.2.0', latestVersion: '2.2.1', available: true, downloadURL: '',
+            releaseNotes: '<script>alert(1)</script>\n\n<img src="x" onerror="alert(1)">\n\n[Unsafe](javascript:alert%281%29)\n\n[Local](file:///C:/Windows/system32/cmd.exe)',
+        });
+        render(<App/>);
+        fireEvent.mouseEnter(await screen.findByRole('button', {name: 'Update'}));
+        const notes = screen.getByRole('tooltip');
+        expect(notes.querySelector('script, img')).toBeNull();
+        expect(within(notes).queryByRole('link')).not.toBeInTheDocument();
+        fireEvent.click(within(notes).getByText('Unsafe'));
+        fireEvent.click(within(notes).getByText('Local'));
+        expect(browserOpenURLMock).not.toHaveBeenCalled();
+    });
+
     it('places the installed version below Settings and hides update controls when up to date', async () => {
         render(<App/>);
         const sidebar = screen.getByRole('complementary', {name: 'Primary navigation'});
