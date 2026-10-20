@@ -71,9 +71,9 @@ wails build -platform windows/amd64 -webview2 download -clean -nsis
 | NSIS 安装包 | `build/bin/*installer.exe` |
 | GitHub Actions artifact | `openend-windows-unsigned` |
 
-`wails.json` 中的 `info` 会写入 Windows 文件属性和安装包元数据；当前版本号为 `2.2.1`。
+`wails.json` 中的 `info` 会写入 Windows 文件属性和安装包元数据；当前版本号为 `2.2.2`。
 
-安装包文件名包含产品名、版本号和架构，例如 `OpenEnd-v2.2.1-windows-amd64-installer.exe`；安装向导标题也会显示 `OpenEnd v2.2.1`。版本号自动读取 `info.productVersion`。
+安装包文件名包含产品名、版本号和架构，例如 `OpenEnd-v2.2.2-windows-amd64-installer.exe`；安装向导标题也会显示 `OpenEnd v2.2.2`。版本号自动读取 `info.productVersion`。
 
 ## 验证安装包
 
@@ -148,7 +148,7 @@ checkout -> setup Go -> setup Node -> npm install -> install Wails -> install NS
 
 当前版本直接读取打包进程序的 `wails.json` 中的 `info.productVersion`。发布时更新此字段，使用对应的 `vX.Y.Z` 正式版本标签，并上传 `OpenEnd-vX.Y.Z-windows-amd64-installer.exe`。安装包必须上传完成，并将该正式 Release 设为 Latest，旧版应用才能检测并提供下载。草稿、预发布、相同版本和更低版本不会提示升级。
 
-检查使用 [GitHub 最新正式版本接口](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)，无需在应用中配置 GitHub token。发布时在 Release 正文中填写更新说明，即可显示在更新按钮的悬浮提示中。
+检查使用 [GitHub 最新正式版本接口](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)，无需在应用中配置 GitHub token。发布时在 Release 正文中填写更新说明，即可显示在更新按钮的悬浮提示中。更新说明支持 Markdown 标题、列表、加粗、代码块和表格；其中的网页链接通过系统浏览器打开。
 
 已发布且未包含更新检查功能的旧安装包，需要用户先手动升级一次到包含此功能的版本，此后才能收到更新提醒。
 
