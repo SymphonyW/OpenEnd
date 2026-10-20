@@ -1,4 +1,6 @@
 import {useEffect, useState, type ReactNode} from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {AppVersion, CheckForUpdate} from '../../wailsjs/go/main/App';
 import type {main} from '../../wailsjs/go/models';
 import {BrowserOpenURL} from '../../wailsjs/runtime/runtime';
@@ -70,7 +72,20 @@ function SidebarUpdates({t, children}: {t: Translator; children: ReactNode}) {
                         <div className="sidebar-update-tooltip" role="tooltip" id="sidebar-update-notes">
                             <div className="sidebar-update-content" tabIndex={0}>
                                 <strong>{t('updates.available')} v{update.latestVersion}</strong>
-                                <div className="sidebar-release-notes">{update.releaseNotes || t('updates.noNotes')}</div>
+                                <div className="sidebar-release-notes">
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        skipHtml
+                                        components={{
+                                            a: ({href, title, children}) => href && /^https?:\/\//i.test(href) ? (
+                                                <a href={href} title={title} onClick={event => {
+                                                    event.preventDefault();
+                                                    BrowserOpenURL(href);
+                                                }}>{children}</a>
+                                            ) : <span>{children}</span>,
+                                        }}
+                                    >{update.releaseNotes || t('updates.noNotes')}</ReactMarkdown>
+                                </div>
                                 <p>{t('updates.installHint')}</p>
                             </div>
                         </div>
