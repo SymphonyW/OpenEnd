@@ -2,7 +2,7 @@
 
 网络页回答“本次打开 OpenEnd 后，哪个应用或项目用了多少流量”。性能页的“网络”选项显示最近 60 秒的下载、上传速度，两条曲线共用自动调整的刻度，支持鼠标查看和方向键查看采样值。
 
-请以管理员身份运行 OpenEnd。普通权限下会显示需要管理员权限的提示，其他页面仍可使用。统计从系统采集成功启动时开始，不能追溯启动前的流量。
+Windows 正式版启动时会自动请求管理员权限。双击程序或桌面快捷方式后，在系统授权提示中确认即可，无需再右键选择“以管理员身份运行”；取消授权时程序不会启动。开发时请从管理员终端运行 `wails dev`；未取得权限的开发运行会显示网络监控需要管理员权限的提示。统计从系统采集成功启动时开始，不能追溯启动前的流量。
 
 | 行为 | 结果 |
 | --- | --- |
@@ -42,6 +42,6 @@ try {
 }
 ```
 
-再以管理员身份运行 `wails dev` 或构建后的 `build/bin/openend.exe`，打开浏览器、运行两个不同目录的项目并安装依赖。检查网络页能否区分归属、依赖安装结束后累计值是否保留，切换页面后性能图表是否保留最近一分钟的数据。最后退出并重启 OpenEnd，确认累计值归零。普通权限启动时，应显示权限提示，不能把采集失败显示成零流量。
+双击构建后的 `build/bin/openend.exe` 或安装后的快捷方式，确认系统自动弹出管理员授权提示；允许后程序启动，取消后程序不启动。开发时从管理员终端运行 `wails dev`。打开浏览器、运行两个不同目录的项目并安装依赖，检查网络页能否区分归属、依赖安装结束后累计值是否保留，切换页面后性能图表是否保留最近一分钟的数据。最后退出并重启 OpenEnd，确认累计值归零。没有取得权限的开发运行应显示权限提示，不能把采集失败显示成零流量。
 
 系统接口依据：[网络事件](https://learn.microsoft.com/en-us/windows/win32/etw/tcpip)、[UDP 事件](https://learn.microsoft.com/en-us/windows/win32/etw/udpip)、[系统跟踪会话](https://learn.microsoft.com/en-us/windows/win32/etw/configuring-and-starting-a-systemtraceprovider-session)、[会话与实时消费模式](https://learn.microsoft.com/en-us/windows/win32/etw/logging-mode-constants)。

@@ -42,6 +42,8 @@ It is built with Wails, Go, React, TypeScript, and Vite. The project focuses on 
 
 Traffic statistics stay in memory and reset when OpenEnd exits. See [network monitoring](docs/network-monitoring.zh-CN.md) for scope and verification steps.
 
+Windows releases automatically request administrator privileges on launch. Approve the Windows permission prompt to run the app; canceling the prompt prevents it from starting.
+
 ## Download
 
 Windows builds are published from GitHub Actions as unsigned installers.
