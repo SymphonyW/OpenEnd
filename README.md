@@ -44,6 +44,8 @@ It is built with Wails, Go, React, TypeScript, and Vite. The project focuses on 
 
 Closing the window with **×** keeps OpenEnd running in the Windows system tray, including network monitoring. Click its tray icon to restore the window, or right-click it and choose **Exit** to quit and clear the session traffic totals. Tray menu labels follow the Windows display language (Chinese or English).
 
+Only one instance of OpenEnd runs at a time. Launching it again from a shortcut, executable, or command line restores and brings the existing window to the front, including when it is hidden in the tray or minimized.
+
 Traffic statistics stay in memory and reset when OpenEnd exits. See [network monitoring](docs/network-monitoring.zh-CN.md) for scope and verification steps.
 
 Windows releases automatically request administrator privileges on launch. Approve the Windows permission prompt to run the app; canceling the prompt prevents it from starting.
