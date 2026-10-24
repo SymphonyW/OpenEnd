@@ -38,6 +38,11 @@ describe('session network monitoring', () => {
         load.mockResolvedValue(snapshot({processes: [row(1, {exited: true})]}));
         render(<NetworkPage page={page} t={t}/>);
         const table = await screen.findByRole('table', {name: 'Network traffic by app and project'});
+        expect(screen.queryByText(/Collected since monitoring started/)).not.toBeInTheDocument();
+        const period = document.querySelector('.network-time-range')!;
+        expect(period).toHaveTextContent('Statistics period:');
+        expect(period.querySelectorAll('time')[0]).toHaveAttribute('dateTime', new Date(1000).toISOString());
+        expect(period.querySelectorAll('time')[1]).toHaveAttribute('dateTime', new Date(3000).toISOString());
         fireEvent.click(within(table).getByRole('button', {name: /repo/}));
         expect(within(table).getByText('node.exe')).toBeInTheDocument();
         expect(within(table).getByText(/PID 42 · Exited/)).toBeInTheDocument();
@@ -77,6 +82,7 @@ describe('session network monitoring', () => {
         await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
         expect(screen.getByText('Unable to refresh network data. Previously collected totals are retained.')).toBeInTheDocument();
         expect(screen.getByRole('table')).toHaveTextContent('2.0 KB');
+        expect(document.querySelector('.network-time-range time:last-child')).toHaveAttribute('dateTime', new Date(3000).toISOString());
         view.rerender(<PageActivityContext.Provider value={false}><NetworkPage page={page} t={t}/></PageActivityContext.Provider>);
         await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
         expect(load).toHaveBeenCalledTimes(2);

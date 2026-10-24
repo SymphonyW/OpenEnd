@@ -127,8 +127,9 @@ h2, h3 { font-weight: 600; }
 .workspace-body { display: flex; flex: 1; min-height: 0; min-width: 0; overflow: auto; }
 .page-panel { width: 100%; min-width: 0; }
 .process-page { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.network-session-note { margin: 14px 20px; color: var(--text-muted); font-size: 12px; line-height: 1.6; flex-shrink: 0; }
-.network-totals { display: flex; flex-wrap: wrap; gap: 36px; margin: 4px 20px 20px; flex-shrink: 0; }
+.network-time-range { margin-left: auto; align-self: flex-end; max-width: 100%; padding-bottom: 8px; color: var(--text-muted); font-size: 11px; line-height: 1.5; text-align: right; font-variant-numeric: tabular-nums; }
+.network-time-range time { white-space: nowrap; }
+.network-totals { display: flex; flex-wrap: wrap; gap: 36px; margin: 18px 20px 20px; flex-shrink: 0; }
 .network-totals dt { color: var(--text-muted); font-size: 12px; }
 .network-totals dd { margin: 6px 0 0; font-size: 24px; font-variant-numeric: tabular-nums; }
 .network-table td.network-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }

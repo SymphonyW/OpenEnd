@@ -23,6 +23,10 @@ export default function NetworkPage({page, t}: {page: PageDefinition; t: Transla
     const available = !!snapshot && snapshot.startedAt > 0;
     const stale = failed || snapshot?.state === 'stale';
     const message = failed ? t('network.loadError') : networkMessage(snapshot, t);
+    const periodStart = available ? new Date(snapshot.startedAt) : null;
+    const periodEnd = available ? new Date(Math.max(snapshot.startedAt, snapshot.updatedAt)) : null;
+    const includeDate = periodStart?.toDateString() !== periodEnd?.toDateString();
+    const formatPeriodTime = (date: Date) => includeDate ? date.toLocaleString([], {hour12: false}) : date.toLocaleTimeString([], {hour12: false});
     const cells = (row: TrafficCounters) => {
         const download = local ? row.localDownloadBytes : row.downloadBytes;
         const upload = local ? row.localUploadBytes : row.uploadBytes;
@@ -40,8 +44,11 @@ export default function NetworkPage({page, t}: {page: PageDefinition; t: Transla
                 <option value="total">{t('network.total')}</option><option value="download">{t('network.download')}</option><option value="upload">{t('network.upload')}</option>
                 {!local && <option value="rate">{t('network.rate')}</option>}
             </select></label>
+            {periodStart && periodEnd && <span className="network-time-range" title={`${periodStart.toLocaleString()} — ${periodEnd.toLocaleString()}`}>
+                {t('network.timeRange')}: <time dateTime={periodStart.toISOString()}>{formatPeriodTime(periodStart)}</time>
+                {' — '}<time dateTime={periodEnd.toISOString()}>{formatPeriodTime(periodEnd)}</time>
+            </span>}
         </div>
-        <p className="network-session-note">{t('network.sessionNote')}{snapshot?.startedAt ? ` · ${t('network.startedAt')} ${new Date(snapshot.startedAt).toLocaleTimeString()}` : ''}</p>
         {message && <StatusMessage variant={snapshot?.state === 'collecting' || !snapshot && !failed ? 'loading' : 'warning'}>{message}</StatusMessage>}
         {!!snapshot && (snapshot.eventsLost > 0 || snapshot.buffersLost > 0) && <StatusMessage variant="warning">{t('network.eventsLost')}</StatusMessage>}
         {!!snapshot?.unparsedEvents && <StatusMessage variant="warning">{t('network.unparsedEvents')}</StatusMessage>}
