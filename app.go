@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"openend/internal/config"
 	processdetail "openend/internal/detail"
@@ -13,6 +14,7 @@ import (
 	portscanner "openend/internal/port"
 	processscanner "openend/internal/process"
 	"openend/internal/project"
+	"openend/internal/tray"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
@@ -45,6 +47,9 @@ type SystemResourceInfo struct {
 
 // App struct
 type App struct {
+	systemTray       atomic.Pointer[tray.Tray]
+	exitRequested    atomic.Bool
+	trayOnce         sync.Once
 	networkMonitor   *network.Monitor
 	ctx              context.Context
 	projectMu        sync.Mutex

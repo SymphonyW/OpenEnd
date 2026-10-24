@@ -71,9 +71,9 @@ wails build -platform windows/amd64 -webview2 download -clean -nsis
 | NSIS 安装包 | `build/bin/*installer.exe` |
 | GitHub Actions artifact | `openend-windows-unsigned` |
 
-`wails.json` 中的 `info` 会写入 Windows 文件属性和安装包元数据；当前版本号为 `2.3.0`。
+`wails.json` 中的 `info` 会写入 Windows 文件属性和安装包元数据；当前版本号为 `2.3.1`。
 
-安装包文件名包含产品名、版本号和架构，例如 `OpenEnd-v2.3.0-windows-amd64-installer.exe`；安装向导标题也会显示 `OpenEnd v2.3.0`。版本号自动读取 `info.productVersion`。
+安装包文件名包含产品名、版本号和架构，例如 `OpenEnd-v2.3.1-windows-amd64-installer.exe`；安装向导标题也会显示 `OpenEnd v2.3.1`。版本号自动读取 `info.productVersion`。
 
 ## 验证安装包
 
@@ -83,8 +83,9 @@ wails build -platform windows/amd64 -webview2 download -clean -nsis
 2. 打开 `build/bin/*installer.exe` 并完成安装。
 3. 从开始菜单或桌面快捷方式启动 OpenEnd。
 4. 验证主要页面能打开，进程、端口、资源数据能正常显示。
-5. 在 Windows "设置 > 应用" 中卸载。
-6. 确认开始菜单/桌面快捷方式移除，安装目录不再残留核心程序文件。
+5. 点击窗口右上角 ×，确认程序隐藏到系统托盘且继续采集网络数据；点击托盘图标或选择“打开 OpenEnd”恢复窗口。
+6. 从托盘菜单选择“退出”，确认程序及托盘图标消失，再在 Windows "设置 > 应用" 中卸载。
+7. 确认开始菜单/桌面快捷方式移除，安装目录不再残留核心程序文件。
 
 发布前同时运行:
 

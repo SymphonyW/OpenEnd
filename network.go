@@ -80,6 +80,7 @@ func (a *App) resolveNetworkProcesses(ctx context.Context, infos []process.Info)
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	a.stopTray(ctx)
 	if a.networkMonitor != nil {
 		a.networkMonitor.Close()
 	}
