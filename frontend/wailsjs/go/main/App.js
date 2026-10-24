@@ -74,10 +74,6 @@ export function KillProcessByPort(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['KillProcessByPort'](arg1, arg2, arg3, arg4);
 }
 
-export function QuitApp() {
-  return window['go']['main']['App']['QuitApp']();
-}
-
 export function SetCleanupRuleEnabled(arg1, arg2) {
   return window['go']['main']['App']['SetCleanupRuleEnabled'](arg1, arg2);
 }

@@ -25,7 +25,6 @@ const getRecentOperationLogsForResourceMock = vi.fn();
 const setProcessProjectMock = vi.fn();
 const checkForUpdateMock = vi.fn();
 const browserOpenURLMock = vi.fn();
-const quitAppMock = vi.fn();
 
 vi.mock('../wailsjs/runtime/runtime', () => ({
     BrowserOpenURL: (url: string) => browserOpenURLMock(url),
@@ -36,7 +35,6 @@ vi.mock('../wailsjs/go/main/App', () => ({
     AddCustomProtectedProcessName: (name: string) => addCustomProtectedProcessNameMock(name),
     AppName: () => new Promise(() => {}),
     AppVersion: () => Promise.resolve('2.1.3'),
-    QuitApp: () => quitAppMock(),
     CheckForUpdate: () => checkForUpdateMock(),
     DeleteCleanupRule: (id: string) => deleteCleanupRuleMock(id),
     DeleteCustomProtectedProcessName: (name: string) => deleteCustomProtectedProcessNameMock(name),
@@ -318,8 +316,6 @@ describe('App layout navigation', () => {
 
     beforeEach(() => {
         window.localStorage.clear();
-        quitAppMock.mockReset();
-        quitAppMock.mockResolvedValue(undefined);
         checkForUpdateMock.mockReset();
         checkForUpdateMock.mockResolvedValue({currentVersion: '2.1.3', latestVersion: '2.1.3', available: false, downloadURL: ''});
         browserOpenURLMock.mockReset();
@@ -1513,19 +1509,6 @@ describe('App layout navigation', () => {
         expect(await screen.findByText('2 cleanup operations finished. 2 succeeded, 0 failed.')).toBeInTheDocument();
         await waitFor(() => expect(getProcessListMock.mock.calls.length).toBeGreaterThanOrEqual(2));
         await waitFor(() => expect(getPortListMock.mock.calls.length).toBeGreaterThanOrEqual(2));
-    });
-
-    it('provides an explicit app exit from Settings and reports a failed exit request', async () => {
-        quitAppMock.mockRejectedValueOnce(new Error('bridge unavailable'));
-        render(<App/>);
-        fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
-        const exit = screen.getByRole('button', {name: 'Exit OpenEnd'});
-        fireEvent.click(exit);
-        expect(await screen.findByText('Unable to exit OpenEnd. Please try again.')).toBeInTheDocument();
-        expect(exit).toBeEnabled();
-        fireEvent.click(exit);
-        await waitFor(() => expect(quitAppMock).toHaveBeenCalledTimes(2));
-        expect(exit).toBeDisabled();
     });
 
     it('loads Settings protection lists and keeps default entries read-only', async () => {

@@ -23,7 +23,11 @@ func (a *App) initializeTray(ctx context.Context) {
 			return
 		}
 		wailsruntime.WindowShow(ctx)
-	}, a.QuitApp)
+	}, func() {
+		if !a.exitRequested.Swap(true) {
+			wailsruntime.Quit(ctx)
+		}
+	})
 	if err != nil {
 		if !a.exitRequested.Load() && !errors.Is(err, errors.ErrUnsupported) {
 			wailsruntime.LogError(ctx, fmt.Sprintf("System tray unavailable: %v", err))
@@ -38,13 +42,6 @@ func (a *App) initializeTray(ctx context.Context) {
 	// A close during tray initialization must not leave a late icon behind.
 	if a.exitRequested.Load() {
 		a.stopTray(ctx)
-	}
-}
-
-// QuitApp is an explicit exit, shared by the tray and the Settings page.
-func (a *App) QuitApp() {
-	if !a.exitRequested.Swap(true) {
-		wailsruntime.Quit(a.appContext())
 	}
 }
 
