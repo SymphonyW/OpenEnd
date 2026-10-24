@@ -1,6 +1,8 @@
 import {Fragment, useState} from 'react';
 import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
+import OwnershipIcon from '../components/OwnershipIcon';
+import ProcessNameCell from '../components/ProcessNameCell';
 import {useNetworkSnapshot} from '../hooks/useNetworkSnapshot';
 import {formatRate, formatTraffic, networkGroups, networkMessage, trafficValue} from '../services/network';
 import type {NetworkSort} from '../services/network';
@@ -58,9 +60,15 @@ export default function NetworkPage({page, t}: {page: PageDefinition; t: Transla
                     <tbody>{groups.map(group => <Fragment key={group.key}>
                         <tr className="network-group"><td><button type="button" className="network-expand" aria-expanded={expanded.has(group.key)} onClick={() => setExpanded(current => {
                             const next = new Set(current); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next;
-                        })}><span aria-hidden="true">{expanded.has(group.key) ? '▾' : '▸'}</span> {group.name || t('projects.ungrouped')} <small>{group.rows.length} {t('network.processes')}</small></button>
-                            <span className="network-path" title={group.path}>{group.kind === 'project' ? t('projects.kindProject') : group.kind === 'application' ? t('projects.kindApplication') : ''}{group.path ? ` · ${group.path}` : ''}</span></td>{cells(group)}</tr>
-                        {expanded.has(group.key) && group.rows.map(row => <tr key={row.id}><td className="network-process" title={row.commandLine || row.path}>{row.name || t('common.unavailable')} <small>PID {row.pid} · {row.exited ? t('network.exited') : t('network.running')}</small></td>{cells(row)}</tr>)}
+                        })}><span aria-hidden="true">{expanded.has(group.key) ? '▾' : '▸'}</span>
+                            <OwnershipIcon kind={group.kind} iconDataURL={group.iconDataURL} name={group.name || t('projects.ungrouped')}/>
+                            <span className="network-group-identity"><span>{group.name || t('projects.ungrouped')} <small>{group.rows.length} {t('network.processes')}</small></span>
+                                <span className="network-path" title={group.path}>{group.kind === 'project' ? t('projects.kindProject') : group.kind === 'application' ? t('projects.kindApplication') : ''}{group.path ? ` · ${group.path}` : ''}</span>
+                            </span></button></td>{cells(group)}</tr>
+                        {expanded.has(group.key) && group.rows.map(row => <tr key={row.id}><td className="network-process" title={row.commandLine || row.path}>
+                            <span className="network-process-identity"><ProcessNameCell iconDataURL={row.iconDataURL} name={row.name} fallbackName={t('common.unavailable')}/>
+                                <small>PID {row.pid} · {row.exited ? t('network.exited') : t('network.running')}</small></span>
+                        </td>{cells(row)}</tr>)}
                     </Fragment>)}</tbody>
                 </table>
             </ScrollableDataTable>}

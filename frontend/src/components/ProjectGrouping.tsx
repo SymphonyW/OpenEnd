@@ -6,6 +6,7 @@ import type {ProcessInfo} from '../types/processes';
 import type {Translator, TranslationKey} from '../services/i18n';
 import {formatMemorySize} from '../services/systemResources';
 import RefreshControls from './RefreshControls';
+import OwnershipIcon from './OwnershipIcon';
 
 export function ProjectToolbar({view, processes, count, total = processes.length, filtered, updatedAt, t}: {
     view: ProjectView; processes: ProcessInfo[]; count: number; total?: number; filtered: boolean; updatedAt?: number; t: Translator;
@@ -42,6 +43,7 @@ export function ProjectGroupRow<T>({group, view, columns, destination, t}: {grou
         <div className="project-group-heading">
             <button className="project-group-toggle" aria-expanded={open} onClick={() => view.toggle(group.key)} title={group.path}>
                 <span className="project-group-chevron" aria-hidden="true">▸</span>
+                <OwnershipIcon kind={group.kind} iconDataURL={group.iconDataURL} name={group.name || t('projects.ungrouped')}/>
                 <span className="project-group-identity">
                     <span className="project-group-name">
                         <strong>{group.name || t('projects.ungrouped')}</strong>

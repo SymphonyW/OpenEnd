@@ -49,6 +49,18 @@ describe('session network monitoring', () => {
         expect(screen.getByText('No matching traffic has been collected yet.')).toBeInTheDocument();
     });
 
+    it('shows main application icons and process icons for expanded traffic rows', async () => {
+        const mainIcon = 'data:image/png;base64,main-icon';
+        const helperIcon = 'data:image/png;base64,helper-icon';
+        load.mockResolvedValue(snapshot({processes: [row(1, {projectPath: '', applicationPath: 'C:\\App\\app.exe', applicationName: 'App',
+            applicationIconDataURL: mainIcon, path: 'C:\\App\\helper.exe', iconDataURL: helperIcon, name: 'helper.exe'})]}));
+        render(<NetworkPage page={page} t={t}/>);
+        const table = await screen.findByRole('table');
+        expect(within(table).getByRole('img', {name: 'App icon'}).querySelector('img')).toHaveAttribute('src', mainIcon);
+        fireEvent.click(within(table).getByRole('button', {name: /App/}));
+        expect(within(table).getByRole('img', {name: 'helper.exe icon'}).querySelector('img')).toHaveAttribute('src', helperIcon);
+    });
+
     it('shows a permission explanation instead of valid zero totals', async () => {
         load.mockResolvedValue(snapshot({state: 'unavailable', startedAt: 0, error: 'network.permission: Access denied', history: [], processes: []}));
         render(<NetworkPage page={page} t={t}/>);
@@ -83,5 +95,7 @@ describe('session network monitoring', () => {
         fireEvent.keyDown(chart, {key: 'ArrowLeft'});
         expect(screen.getByRole('status')).toHaveTextContent('Download 128 B/s');
         expect(screen.getByText('Some network events were lost. Session totals are incomplete.')).toBeInTheDocument();
+        expect(screen.getByText(/Last updated:/)).toBeInTheDocument();
+        expect(screen.queryByText(/Collected since monitoring started/)).not.toBeInTheDocument();
     });
 });

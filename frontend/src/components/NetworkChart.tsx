@@ -65,7 +65,7 @@ export function NetworkPerformance({snapshot, failed, t}: {snapshot: NetworkSnap
             <div><dt>{t('network.download')}</dt><dd>{available ? formatTraffic(snapshot.downloadBytes) : t('resource.unavailable')}</dd></div>
             <div><dt>{t('network.upload')}</dt><dd>{available ? formatTraffic(snapshot.uploadBytes) : t('resource.unavailable')}</dd></div>
         </dl>
-        <p className="resource-updated-at">{t('network.sessionNote')}{snapshot?.updatedAt ? ` · ${t('dashboard.lastUpdated')}: ${new Date(snapshot.updatedAt).toLocaleTimeString()}` : ''}</p>
+        {!!snapshot?.updatedAt && <p className="resource-updated-at">{t('dashboard.lastUpdated')}: {new Date(snapshot.updatedAt).toLocaleTimeString()}</p>}
         {message && <StatusMessage variant="warning">{message}</StatusMessage>}
         {!!snapshot && (snapshot.eventsLost > 0 || snapshot.buffersLost > 0) && <StatusMessage variant="warning">{t('network.eventsLost')}</StatusMessage>}
         {!!snapshot?.unparsedEvents && <StatusMessage variant="warning">{t('network.unparsedEvents')}</StatusMessage>}

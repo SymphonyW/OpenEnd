@@ -39,6 +39,7 @@ export function networkGroups(rows: NetworkProcess[], sort: NetworkSort, local =
             groups.set(owner.key, group);
         }
         group.rows.push(row);
+        if (!group.iconDataURL) group.iconDataURL = owner.iconDataURL;
         for (const key of ['downloadBytes', 'uploadBytes', 'localDownloadBytes', 'localUploadBytes', 'downloadRate', 'uploadRate'] as const) group[key] += row[key];
     }
     const compare = (a: TrafficCounters, b: TrafficCounters) => trafficValue(b, sort, local) - trafficValue(a, sort, local);

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"openend/internal/config"
 	"openend/internal/process"
@@ -28,6 +29,16 @@ func (a *App) assignProjects(ctx context.Context, processes []process.Info) ([]p
 	}
 	a.projectMu.Unlock()
 	project.Assign(processes, rules, overrides)
+	for i := range processes {
+		p := &processes[i]
+		if p.IconDataURL == "" && filepath.IsAbs(p.Path) && !strings.HasPrefix(p.Path, `\\`) {
+			p.IconDataURL = process.IconDataURLForPath(p.Path)
+		}
+		p.ApplicationIconDataURL = ""
+		if p.ApplicationPath != "" {
+			p.ApplicationIconDataURL = process.IconDataURLForPath(p.ApplicationPath)
+		}
+	}
 	return processes, nil
 }
 

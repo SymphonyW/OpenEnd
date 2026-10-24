@@ -339,6 +339,7 @@ export namespace network {
 	    projectRuleSource: string;
 	    applicationPath: string;
 	    applicationName: string;
+	    applicationIconDataURL: string;
 	    applicationReason: string;
 	    createdAt: number;
 	    pid: number;
@@ -374,6 +375,7 @@ export namespace network {
 	        this.projectRuleSource = source["projectRuleSource"];
 	        this.applicationPath = source["applicationPath"];
 	        this.applicationName = source["applicationName"];
+	        this.applicationIconDataURL = source["applicationIconDataURL"];
 	        this.applicationReason = source["applicationReason"];
 	        this.createdAt = source["createdAt"];
 	        this.pid = source["pid"];
@@ -517,6 +519,7 @@ export namespace process {
 	    projectRuleSource: string;
 	    applicationPath: string;
 	    applicationName: string;
+	    applicationIconDataURL: string;
 	    applicationReason: string;
 	    createdAt: number;
 	    pid: number;
@@ -544,6 +547,7 @@ export namespace process {
 	        this.projectRuleSource = source["projectRuleSource"];
 	        this.applicationPath = source["applicationPath"];
 	        this.applicationName = source["applicationName"];
+	        this.applicationIconDataURL = source["applicationIconDataURL"];
 	        this.applicationReason = source["applicationReason"];
 	        this.createdAt = source["createdAt"];
 	        this.pid = source["pid"];

@@ -1361,7 +1361,7 @@ describe('App layout navigation', () => {
     it('shows app and project groups together and filters app ports using the same executable identity', async () => {
         const appPath = 'C:\\Apps\\Browser\\chrome.exe';
         getProcessListMock.mockResolvedValue(processRows.map(process => {
-            if (process.pid === 600) return {...process, applicationName: 'Google Chrome', applicationPath: appPath, applicationReason: 'applicationPath'};
+            if (process.pid === 600) return {...process, applicationName: 'Google Chrome', applicationPath: appPath, applicationReason: 'applicationPath', applicationIconDataURL: nodeIconDataURL};
             if (process.pid === 100) return {...process, projectName: 'Alpha', projectPath: 'D:\\Projects\\Alpha'};
             return process;
         }));
@@ -1372,6 +1372,8 @@ describe('App layout navigation', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Apps & projects'}));
         const appHeading = within(processTable).getByRole('button', {name: /Google Chrome/});
         expect(appHeading).toHaveTextContent('App');
+        expect(within(appHeading).getByRole('img', {name: 'Google Chrome icon'}).querySelector('img')).toHaveAttribute('src', nodeIconDataURL);
+        expect(within(processTable).getByRole('img', {name: 'Alpha icon'}).querySelector('svg')).not.toBeNull();
         expect(within(processTable).getByRole('button', {name: /Alpha/})).toHaveTextContent('Project');
         fireEvent.click(within(appHeading.closest('tr')!).getByRole('button', {name: 'View ports'}));
         const portsTable = await screen.findByRole('table', {name: 'Port list'});
@@ -1379,6 +1381,7 @@ describe('App layout navigation', () => {
         expect(within(portsTable).queryByText('3000')).not.toBeInTheDocument();
         expect(screen.getByRole('combobox', {name: 'App or project filter'})).toHaveValue('app:c:/apps/browser/chrome.exe');
         expect(within(portsTable).getByRole('button', {name: /Google Chrome/})).toHaveTextContent('App');
+        expect(within(portsTable).getByRole('img', {name: 'Google Chrome icon'}).querySelector('img')).toHaveAttribute('src', nodeIconDataURL);
         fireEvent.click(screen.getByRole('button', {name: 'View processes'}));
         const filteredProcesses = await screen.findByRole('table', {name: 'Process list'});
         expect(within(filteredProcesses).getByText('chrome.exe', {selector: '.process-name-text'})).toBeInTheDocument();

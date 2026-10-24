@@ -10,6 +10,7 @@ export interface ProcessInfo {
 	projectRuleSource?: string;
     applicationPath?: string;
     applicationName?: string;
+    applicationIconDataURL?: string;
     applicationReason?: string;
     pid: number;
     createdAt: number;

@@ -134,7 +134,12 @@ h2, h3 { font-weight: 600; }
 .network-table td.network-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .network-table th:not(:first-child) { text-align: right; }
 .network-group { background: var(--surface-muted); }
-.network-expand { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
+.network-expand { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
+.network-group-identity { min-width: 0; }
+.network-group-identity > span:first-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.network-process-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.network-process-identity .process-name-cell { min-width: 0; max-width: 60%; }
+.network-process-identity small { flex-shrink: 0; }
 .network-expand small, .network-process small { margin-left: 10px; color: var(--text-muted); font-size: 11px; font-weight: 400; }
 .network-path { display: block; max-width: 380px; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 11px; }
 .network-table .network-process { padding-left: 32px; }
@@ -307,6 +312,8 @@ button:disabled { cursor: default; opacity: .45; }
 .project-group-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--text); min-width: 0; text-align: left; }
 .project-group-chevron { flex: 0 0 12px; color: var(--text-muted); transition: transform 140ms ease; }
 .project-group-toggle[aria-expanded="true"] .project-group-chevron { transform: rotate(90deg); }
+.ownership-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 24px; width: 24px; height: 24px; }
+.ownership-icon img, .ownership-icon svg { display: block; width: 20px; height: 20px; object-fit: contain; }
 .project-group-identity { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .project-group-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .project-group-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
@@ -327,13 +334,13 @@ button:disabled { cursor: default; opacity: .45; }
 .project-link:hover { background: var(--surface); border-color: var(--accent-border); }
 @container (max-width: 760px) {
     .project-group-heading { grid-template-columns: minmax(150px, 1fr) auto 82px; gap: 8px 12px; padding-inline: 16px; }
-    .project-group-ports { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 8px; padding-left: 22px; }
+    .project-group-ports { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 8px; padding-left: 56px; }
     .project-group-ports-label { flex-shrink: 0; }
     .project-group-action { grid-column: 3; grid-row: 1; }
 }
 @container (max-width: 480px) {
     .project-group-heading { grid-template-columns: minmax(0, 1fr) 82px; }
-    .project-group-metrics { grid-row: 2; grid-column: 1 / -1; padding-left: 22px; justify-content: start; }
+    .project-group-metrics { grid-row: 2; grid-column: 1 / -1; padding-left: 56px; justify-content: start; }
     .project-group-action { grid-column: 2; }
 }
 @media (prefers-reduced-motion: reduce) {

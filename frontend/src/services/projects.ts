@@ -15,16 +15,17 @@ export function projectKey(path = ''): string {
 
 export type OwnershipKind = 'project' | 'application' | 'unknown';
 
-export function ownershipOf(process?: ProcessInfo): {key: string; kind: OwnershipKind; path: string; name: string; reason: string} {
+export function ownershipOf(process?: ProcessInfo): {key: string; kind: OwnershipKind; path: string; name: string; reason: string; iconDataURL: string} {
     if (process?.projectPath) {
         return {key: projectKey(process.projectPath), kind: 'project', path: process.projectPath,
-            name: process.projectName || process.projectPath.split(/[\\/]/).pop() || '', reason: process.projectReason || ''};
+            name: process.projectName || process.projectPath.split(/[\\/]/).pop() || '', reason: process.projectReason || '', iconDataURL: ''};
     }
     if (process?.applicationPath) {
         return {key: `app:${projectKey(process.applicationPath)}`, kind: 'application', path: process.applicationPath,
-            name: process.applicationName || process.applicationPath.split(/[\\/]/).pop() || '', reason: process.applicationReason || ''};
+            name: process.applicationName || process.applicationPath.split(/[\\/]/).pop() || '', reason: process.applicationReason || '',
+            iconDataURL: process.applicationIconDataURL || (projectKey(process.path) === projectKey(process.applicationPath) ? process.iconDataURL : '')};
     }
-    return {key: '', kind: 'unknown', path: '', name: '', reason: process?.projectReason || ''};
+    return {key: '', kind: 'unknown', path: '', name: '', reason: process?.projectReason || '', iconDataURL: ''};
 }
 
 export function matchingOwner(port: PortInfo, owners: Map<number, ProcessInfo>): ProcessInfo | undefined {
@@ -64,6 +65,7 @@ export interface ProjectGroup<T> {
     path: string;
     name: string;
     kind: OwnershipKind;
+    iconDataURL: string;
     rows: T[];
     processCount: number;
     memoryBytes: number;
@@ -91,6 +93,7 @@ export function buildProjectGroups<T>(rows: T[], ownerOf: (row: T) => ProcessInf
             groups.set(key, entry);
         }
         entry.group.rows.push(row);
+        if (!entry.group.iconDataURL) entry.group.iconDataURL = ownership.iconDataURL;
         if (owner) entry.owners.set(`${owner.pid}:${owner.createdAt}`, owner);
         else entry.group.hasUnknownOwners = true;
     }
