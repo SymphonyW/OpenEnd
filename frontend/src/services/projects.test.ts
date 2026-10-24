@@ -44,4 +44,14 @@ describe('shared project views', () => {
         expect(portGroups[0].memoryBytes).toBe(app.memoryBytes);
         expect(portGroups[0].kind).toBe('application');
     });
+
+    it('uses the main application icon even when only a helper process is visible', () => {
+        const helper = {...owner, projectPath: '', applicationPath: 'C:\\App\\app.exe', applicationName: 'App',
+            path: 'C:\\App\\helper.exe', iconDataURL: 'helper-icon', applicationIconDataURL: 'app-icon'};
+        expect(buildProjectGroups([helper], row => row, [])[0].iconDataURL).toBe('app-icon');
+        expect(buildProjectGroups([port], () => helper, [port])[0].iconDataURL).toBe('app-icon');
+        expect(ownershipOf({...helper, applicationIconDataURL: ''}).iconDataURL).toBe('');
+        expect(ownershipOf({...helper, applicationIconDataURL: '', path: helper.applicationPath, iconDataURL: 'main-icon'}).iconDataURL).toBe('main-icon');
+        expect(ownershipOf({...helper, projectPath: 'D:\\repo'}).iconDataURL).toBe('');
+    });
 });

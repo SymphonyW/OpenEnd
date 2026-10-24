@@ -22,22 +22,73 @@
 
 [Blog post of OpenEnd](https://symphonyw.github.io/p/openend/)
 
-OpenEnd is a Windows desktop application for developers who need a clear view of local processes, ports, and system resource usage.
+OpenEnd is a Windows desktop application for developers who need a clear view of local processes, ports, system resources, and network traffic by app or project.
 
 It is built with Wails, Go, React, TypeScript, and Vite. The project focuses on practical local diagnostics: finding which process owns a port, reviewing resource usage, and safely stopping development-related processes when needed.
+
+![OpenEnd Performance page showing the CPU usage chart, resource selectors, and system statistics](docs/images/performance.png)
 
 ## Features
 
 | Area | Capabilities |
 | --- | --- |
-| Dashboard | View CPU, memory, process, port, and GPU-related system resource data |
-| Processes | Inspect running processes, resource usage, executable paths, commands, and process details |
-| Apps & Projects | Group processes and ports by application or development project, with shared ownership and manual project assignments |
-| Ports | Identify occupied TCP/UDP ports and map them back to owning processes |
+| Performance | View CPU, memory, GPU, and VRAM usage, system statistics, and 60-second network speed charts |
+| Network | Track session traffic totals and current speeds by app and project, compare download/upload shares and the top five traffic consumers, and filter by search or traffic scope |
+| Processes | Search by process name or PID, sort by CPU or memory usage, and inspect process icons, ports, executable paths, commands, and details |
+| Apps & Projects | Group processes, ports, and traffic by application or development project, expand group members, and manage ownership assignments |
+| Ports | Filter TCP/UDP ports by port number, process name, protocol, or status, and inspect the owning process |
 | Cleanup | Review development-related processes before taking cleanup actions |
-| Safety | Protect critical Windows processes from accidental termination |
+| Safety | Protect critical Windows processes and require confirmation before stopping a process or ending port occupancy |
 | Logs | Track process and cleanup operations for later review |
 | Settings | Configure application behavior and protected process rules |
+
+Traffic statistics stay in memory and reset when OpenEnd exits. See [network monitoring](docs/network-monitoring.zh-CN.md) for scope and verification steps.
+
+Windows releases automatically request administrator privileges on launch. Approve the Windows permission prompt to run the app; canceling the prompt prevents it from starting.
+
+## Screenshots
+
+**Network traffic**
+
+Compare download/upload shares and the top traffic consumers, then expand an app or project to inspect its processes. Light blue marks downloads; light green marks uploads. The statistics period appears at the top right.
+
+![Network traffic page with a download/upload share chart, app and project rankings, and expandable process traffic details](docs/images/network.png)
+
+<details>
+<summary>Process list</summary>
+
+Search by process name or PID and sort by memory or CPU usage. Each row shows the process icon, resource usage, ports, app or project ownership, and executable details.
+
+![Process list with name and PID filters, memory sorting, process icons, resource usage, and app ownership](docs/images/processes.png)
+
+</details>
+
+<details>
+<summary>Port list</summary>
+
+Filter by port number, process name, protocol, or connection status to find the process behind an occupied TCP or UDP port.
+
+![Port list with port, process, protocol, and status filters and the corresponding owning processes](docs/images/ports.png)
+
+</details>
+
+<details>
+<summary>Apps and projects</summary>
+
+Review process counts, memory usage, and listening or UDP ports by app or project. Expand a group to inspect its ports, or use “View processes” to open its processes.
+
+![Ports grouped by app and project, showing application icons, resource summaries, listening ports, and an expanded project](docs/images/apps-projects.png)
+
+</details>
+
+<details>
+<summary>Port search and termination confirmation</summary>
+
+For example, searching for port `1313` locates `hugo.exe`. Before ending its port occupancy, the confirmation dialog shows the process creation time, protocol, PID, and executable path for review.
+
+![Port 1313 search result with the hugo.exe details pane and port occupancy termination confirmation dialog](docs/images/search-by-port.png)
+
+</details>
 
 ## Download
 

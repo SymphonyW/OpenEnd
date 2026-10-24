@@ -9,6 +9,7 @@ import (
 
 	"openend/internal/config"
 	processdetail "openend/internal/detail"
+	"openend/internal/network"
 	portscanner "openend/internal/port"
 	processscanner "openend/internal/process"
 	"openend/internal/project"
@@ -44,6 +45,7 @@ type SystemResourceInfo struct {
 
 // App struct
 type App struct {
+	networkMonitor   *network.Monitor
 	ctx              context.Context
 	projectMu        sync.Mutex
 	projectOverrides map[project.Identity]string
@@ -58,6 +60,8 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.networkMonitor = network.New()
+	a.networkMonitor.Start(ctx, a.resolveNetworkProcesses)
 }
 
 // AppName returns the desktop application name through the Wails binding.

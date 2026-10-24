@@ -28,6 +28,13 @@
 .performance-metrics dd { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 400; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .resource-metric-status { display: block; margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .resource-updated-at { margin: 30px 0 0; color: var(--text-soft); font-size: 11px; }
+.network-graph polyline, .network-graph .network-upload-line line, .network-graph .network-download-line line { fill: none; stroke: var(--network-download); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.network-mini-chart .network-download-line polyline, .network-mini-chart .network-download-line line { stroke: var(--network-download); }
+.network-graph .network-upload-line polyline, .network-graph .network-upload-line line, .network-mini-chart .network-upload-line polyline, .network-mini-chart .network-upload-line line { stroke: var(--network-upload); stroke-dasharray: 5 3; }
+.network-chart-stale .network-graph { opacity: .45; }
+.network-legend { display: flex; gap: 24px; margin: 8px 0 0; color: var(--text-muted); font-size: 12px; }
+.network-legend span::before { content: ''; display: inline-block; width: 20px; margin-right: 6px; vertical-align: middle; border-top: 2px solid var(--network-download); }
+.network-legend .network-upload-key::before { border-top: 2px dashed var(--network-upload); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 1100px) {
     .performance-workspace { grid-template-columns: 166px minmax(0, 1fr); }

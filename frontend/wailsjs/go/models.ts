@@ -327,6 +327,155 @@ export namespace main {
 
 }
 
+export namespace network {
+	
+	export class Row {
+	    parentPID: number;
+	    workingDirectory: string;
+	    workingDirectoryError: string;
+	    projectPath: string;
+	    projectName: string;
+	    projectReason: string;
+	    projectRuleSource: string;
+	    applicationPath: string;
+	    applicationName: string;
+	    applicationIconDataURL: string;
+	    applicationReason: string;
+	    createdAt: number;
+	    pid: number;
+	    name: string;
+	    iconDataURL: string;
+	    path: string;
+	    commandLine: string;
+	    user: string;
+	    cpuPercent: number;
+	    memoryBytes: number;
+	    isProtected: boolean;
+	    downloadBytes: number;
+	    uploadBytes: number;
+	    localDownloadBytes: number;
+	    localUploadBytes: number;
+	    downloadRate: number;
+	    uploadRate: number;
+	    id: number;
+	    exited: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Row(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.parentPID = source["parentPID"];
+	        this.workingDirectory = source["workingDirectory"];
+	        this.workingDirectoryError = source["workingDirectoryError"];
+	        this.projectPath = source["projectPath"];
+	        this.projectName = source["projectName"];
+	        this.projectReason = source["projectReason"];
+	        this.projectRuleSource = source["projectRuleSource"];
+	        this.applicationPath = source["applicationPath"];
+	        this.applicationName = source["applicationName"];
+	        this.applicationIconDataURL = source["applicationIconDataURL"];
+	        this.applicationReason = source["applicationReason"];
+	        this.createdAt = source["createdAt"];
+	        this.pid = source["pid"];
+	        this.name = source["name"];
+	        this.iconDataURL = source["iconDataURL"];
+	        this.path = source["path"];
+	        this.commandLine = source["commandLine"];
+	        this.user = source["user"];
+	        this.cpuPercent = source["cpuPercent"];
+	        this.memoryBytes = source["memoryBytes"];
+	        this.isProtected = source["isProtected"];
+	        this.downloadBytes = source["downloadBytes"];
+	        this.uploadBytes = source["uploadBytes"];
+	        this.localDownloadBytes = source["localDownloadBytes"];
+	        this.localUploadBytes = source["localUploadBytes"];
+	        this.downloadRate = source["downloadRate"];
+	        this.uploadRate = source["uploadRate"];
+	        this.id = source["id"];
+	        this.exited = source["exited"];
+	    }
+	}
+	export class Sample {
+	    time: number;
+	    downloadRate: number;
+	    uploadRate: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Sample(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.time = source["time"];
+	        this.downloadRate = source["downloadRate"];
+	        this.uploadRate = source["uploadRate"];
+	    }
+	}
+	export class Snapshot {
+	    downloadBytes: number;
+	    uploadBytes: number;
+	    localDownloadBytes: number;
+	    localUploadBytes: number;
+	    downloadRate: number;
+	    uploadRate: number;
+	    state: string;
+	    error: string;
+	    startedAt: number;
+	    updatedAt: number;
+	    eventsLost: number;
+	    buffersLost: number;
+	    unparsedEvents: number;
+	    attributionError: string;
+	    processes: Row[];
+	    history: Sample[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Snapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.downloadBytes = source["downloadBytes"];
+	        this.uploadBytes = source["uploadBytes"];
+	        this.localDownloadBytes = source["localDownloadBytes"];
+	        this.localUploadBytes = source["localUploadBytes"];
+	        this.downloadRate = source["downloadRate"];
+	        this.uploadRate = source["uploadRate"];
+	        this.state = source["state"];
+	        this.error = source["error"];
+	        this.startedAt = source["startedAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.eventsLost = source["eventsLost"];
+	        this.buffersLost = source["buffersLost"];
+	        this.unparsedEvents = source["unparsedEvents"];
+	        this.attributionError = source["attributionError"];
+	        this.processes = this.convertValues(source["processes"], Row);
+	        this.history = this.convertValues(source["history"], Sample);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace port {
 	
 	export class Info {
@@ -370,6 +519,7 @@ export namespace process {
 	    projectRuleSource: string;
 	    applicationPath: string;
 	    applicationName: string;
+	    applicationIconDataURL: string;
 	    applicationReason: string;
 	    createdAt: number;
 	    pid: number;
@@ -397,6 +547,7 @@ export namespace process {
 	        this.projectRuleSource = source["projectRuleSource"];
 	        this.applicationPath = source["applicationPath"];
 	        this.applicationName = source["applicationName"];
+	        this.applicationIconDataURL = source["applicationIconDataURL"];
 	        this.applicationReason = source["applicationReason"];
 	        this.createdAt = source["createdAt"];
 	        this.pid = source["pid"];

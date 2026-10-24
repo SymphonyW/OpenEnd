@@ -1,4 +1,4 @@
-export type PageId = 'dashboard' | 'processes' | 'ports' | 'cleanup' | 'logs' | 'feedback' | 'settings';
+export type PageId = 'dashboard' | 'processes' | 'ports' | 'network' | 'cleanup' | 'logs' | 'feedback' | 'settings';
 
 export interface PageDefinition {
     id: PageId;

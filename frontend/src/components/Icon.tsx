@@ -9,6 +9,7 @@ const paths: Record<IconName, string> = {
     dashboard: 'M3 17V5m0 14h18M6 14l4-5 4 3 6-8',
     processes: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
     ports: 'M8 3v5m8-5v5M6 8h12v4a6 6 0 0 1-12 0V8zm6 10v3',
+    network: 'M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4',
     cleanup: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5m4-5v5',
     logs: 'M6 3h9l4 4v14H6zM14 3v5h5M9 12h7m-7 4h7',
     feedback: 'M4 5h16v11H8l-4 4V5zm4 4h8m-8 4h5',

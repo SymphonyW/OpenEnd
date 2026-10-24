@@ -7,6 +7,7 @@ import type {SystemResourceInfo} from './types/systemResources';
 const appStyles = readFileSync('src/App.css', 'utf8');
 
 const getSystemResourceInfoMock = vi.fn();
+const getNetworkSnapshotMock = vi.fn();
 const getProcessListMock = vi.fn();
 const getProcessDetailMock = vi.fn();
 const getPortListMock = vi.fn();
@@ -45,6 +46,7 @@ vi.mock('../wailsjs/go/main/App', () => ({
     GetProtectionSettings: () => getProtectionSettingsMock(),
     GetRecentOperationLogsForResource: (pid: number, processName: string, ports: number[]) => getRecentOperationLogsForResourceMock(pid, processName, ports),
     GetSystemResourceInfo: () => getSystemResourceInfoMock(),
+    GetNetworkSnapshot: () => getNetworkSnapshotMock(),
     KillProcessByPID: (pid: number, createdAt: number) => killProcessByPIDMock(pid, createdAt),
     KillProcessByPort: (port: number, protocol: string, pid: number, createdAt: number) => killProcessByPortMock(port, protocol, pid, createdAt),
     SetCleanupRuleEnabled: (id: string, enabled: boolean) => setCleanupRuleEnabledMock(id, enabled),
@@ -319,6 +321,8 @@ describe('App layout navigation', () => {
         browserOpenURLMock.mockReset();
         getSystemResourceInfoMock.mockReset();
         getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo());
+        getNetworkSnapshotMock.mockReset();
+        getNetworkSnapshotMock.mockResolvedValue({state: 'unavailable', error: 'network.permission: Access denied', attributionError: '', startedAt: 0, updatedAt: 0, eventsLost: 0, buffersLost: 0, downloadBytes: 0, uploadBytes: 0, localDownloadBytes: 0, localUploadBytes: 0, downloadRate: 0, uploadRate: 0, processes: [], history: []});
         getProcessListMock.mockReset();
         getProcessListMock.mockResolvedValue(processRows);
         setProcessProjectMock.mockReset();
@@ -539,6 +543,22 @@ describe('App layout navigation', () => {
         expect(await screen.findByLabelText('CPU usage chart')).toBeInTheDocument();
         expect(screen.queryByRole('heading', {name: 'Performance'})).not.toBeInTheDocument();
         expect(screen.queryByText('System overview')).not.toBeInTheDocument();
+    });
+
+    it('opens network traffic from navigation and network graphs from Performance', async () => {
+        getNetworkSnapshotMock.mockResolvedValue({state: 'ready', error: '', attributionError: '', startedAt: 1000, updatedAt: 3000, eventsLost: 0, buffersLost: 0,
+            downloadBytes: 2048, uploadBytes: 1024, localDownloadBytes: 0, localUploadBytes: 0, downloadRate: 64, uploadRate: 32, processes: [],
+            history: [{time: 2000, downloadRate: 64, uploadRate: 32}, {time: 3000, downloadRate: 128, uploadRate: 16}]});
+        render(<App/>);
+        await screen.findByLabelText('CPU usage chart');
+        const networkResource = screen.getAllByRole('button', {name: 'Network'}).find(button => button.hasAttribute('aria-pressed'))!;
+        fireEvent.click(networkResource);
+        expect(await screen.findByRole('img', {name: 'Network upload and download chart'})).toBeInTheDocument();
+        const sidebar = screen.getByRole('complementary', {name: 'Primary navigation'});
+        fireEvent.click(within(sidebar).getByRole('button', {name: 'Network'}));
+        expect(await screen.findByText('No matching traffic has been collected yet.')).toBeInTheDocument();
+        await act(async () => { fireEvent.click(within(sidebar).getByRole('button', {name: 'Performance'})); });
+        expect(screen.getByRole('img', {name: 'Network upload and download chart'}).querySelectorAll('polyline')).toHaveLength(2);
     });
 
     it('renders Dashboard while async GPU details are still pending', async () => {
@@ -1341,7 +1361,7 @@ describe('App layout navigation', () => {
     it('shows app and project groups together and filters app ports using the same executable identity', async () => {
         const appPath = 'C:\\Apps\\Browser\\chrome.exe';
         getProcessListMock.mockResolvedValue(processRows.map(process => {
-            if (process.pid === 600) return {...process, applicationName: 'Google Chrome', applicationPath: appPath, applicationReason: 'applicationPath'};
+            if (process.pid === 600) return {...process, applicationName: 'Google Chrome', applicationPath: appPath, applicationReason: 'applicationPath', applicationIconDataURL: nodeIconDataURL};
             if (process.pid === 100) return {...process, projectName: 'Alpha', projectPath: 'D:\\Projects\\Alpha'};
             return process;
         }));
@@ -1352,6 +1372,8 @@ describe('App layout navigation', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Apps & projects'}));
         const appHeading = within(processTable).getByRole('button', {name: /Google Chrome/});
         expect(appHeading).toHaveTextContent('App');
+        expect(within(appHeading).getByRole('img', {name: 'Google Chrome icon'}).querySelector('img')).toHaveAttribute('src', nodeIconDataURL);
+        expect(within(processTable).getByRole('img', {name: 'Alpha icon'}).querySelector('svg')).not.toBeNull();
         expect(within(processTable).getByRole('button', {name: /Alpha/})).toHaveTextContent('Project');
         fireEvent.click(within(appHeading.closest('tr')!).getByRole('button', {name: 'View ports'}));
         const portsTable = await screen.findByRole('table', {name: 'Port list'});
@@ -1359,6 +1381,7 @@ describe('App layout navigation', () => {
         expect(within(portsTable).queryByText('3000')).not.toBeInTheDocument();
         expect(screen.getByRole('combobox', {name: 'App or project filter'})).toHaveValue('app:c:/apps/browser/chrome.exe');
         expect(within(portsTable).getByRole('button', {name: /Google Chrome/})).toHaveTextContent('App');
+        expect(within(portsTable).getByRole('img', {name: 'Google Chrome icon'}).querySelector('img')).toHaveAttribute('src', nodeIconDataURL);
         fireEvent.click(screen.getByRole('button', {name: 'View processes'}));
         const filteredProcesses = await screen.findByRole('table', {name: 'Process list'});
         expect(within(filteredProcesses).getByText('chrome.exe', {selector: '.process-name-text'})).toBeInTheDocument();
