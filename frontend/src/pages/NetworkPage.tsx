@@ -3,6 +3,7 @@ import ScrollableDataTable from '../components/ScrollableDataTable';
 import StatusMessage from '../components/StatusMessage';
 import OwnershipIcon from '../components/OwnershipIcon';
 import ProcessNameCell from '../components/ProcessNameCell';
+import NetworkTrafficCharts from '../components/NetworkTrafficCharts';
 import {useNetworkSnapshot} from '../hooks/useNetworkSnapshot';
 import {formatRate, formatTraffic, networkGroups, networkMessage, trafficValue} from '../services/network';
 import type {NetworkSort} from '../services/network';
@@ -55,12 +56,8 @@ export default function NetworkPage({page, t}: {page: PageDefinition; t: Transla
         {!!snapshot?.attributionError && <StatusMessage variant="warning">{t('network.attributionError')}</StatusMessage>}
         {stale && available && <StatusMessage variant="warning">{t('resource.stale')}</StatusMessage>}
         {available && <>
-            <dl className="network-totals">
-                <div><dt>{t('network.download')}</dt><dd>{formatTraffic(local ? snapshot.localDownloadBytes : snapshot.downloadBytes)}</dd></div>
-                <div><dt>{t('network.upload')}</dt><dd>{formatTraffic(local ? snapshot.localUploadBytes : snapshot.uploadBytes)}</dd></div>
-                <div><dt>{t('network.total')}</dt><dd>{formatTraffic(local ? snapshot.localDownloadBytes + snapshot.localUploadBytes : snapshot.downloadBytes + snapshot.uploadBytes)}</dd></div>
-            </dl>
-            {groups.length === 0 ? <StatusMessage variant="empty">{t('network.empty')}</StatusMessage> : <ScrollableDataTable scrollbarLabel={t('network.table')}>
+            <NetworkTrafficCharts snapshot={snapshot} groups={groups} local={local} filtered={!!query} t={t}/>
+            {groups.length > 0 && <ScrollableDataTable scrollbarLabel={t('network.table')}>
                 <table className="process-table network-table" aria-label={t('network.table')}>
                     <colgroup><col style={{width: '40%'}}/>{[0, 1, 2, 3, 4].map(index => <col key={index} style={{width: '12%'}}/>)}</colgroup>
                     <thead><tr><th>{t('projects.project')}</th><th>{t('network.download')}</th><th>{t('network.upload')}</th><th>{t('network.total')}</th><th>{t('network.downloadRate')}</th><th>{t('network.uploadRate')}</th></tr></thead>

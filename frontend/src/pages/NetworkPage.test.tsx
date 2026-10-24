@@ -72,6 +72,48 @@ describe('session network monitoring', () => {
         expect(await screen.findByText('Run OpenEnd as administrator to monitor traffic by app and project.')).toBeInTheDocument();
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
         expect(screen.queryByText('0 B')).not.toBeInTheDocument();
+        expect(screen.queryByRole('img', {name: /Traffic direction/})).not.toBeInTheDocument();
+    });
+
+    it('updates both traffic charts with search and localhost scope, including an empty result', async () => {
+        load.mockResolvedValue(snapshot({downloadBytes: 4096, uploadBytes: 4096, localDownloadBytes: 640, localUploadBytes: 896, processes: [
+            row(1, {projectPath: 'D:\\Alpha', projectName: 'Alpha', downloadBytes: 3072, uploadBytes: 1024, localDownloadBytes: 128, localUploadBytes: 384}),
+            row(2, {projectPath: 'D:\\Beta', projectName: 'Beta', downloadBytes: 1024, uploadBytes: 3072, localDownloadBytes: 512, localUploadBytes: 512}),
+        ]}));
+        render(<NetworkPage page={page} t={t}/>);
+        const direction = await screen.findByRole('img', {name: /Traffic direction:/});
+        expect(direction).toHaveAccessibleName('Traffic direction: Downloaded 4.0 KB (50.0%), Uploaded 4.0 KB (50.0%)');
+        expect(screen.getByRole('list', {name: 'App and project traffic'}).children).toHaveLength(2);
+        fireEvent.change(screen.getByLabelText('Search app, project or process'), {target: {value: 'Alpha'}});
+        expect(direction).toHaveAccessibleName('Traffic direction: Downloaded 3.0 KB (75.0%), Uploaded 1.0 KB (25.0%)');
+        expect(screen.getByRole('listitem')).toHaveAccessibleName(/Alpha: 4.0 KB, 100.0%/);
+        expect(screen.getByText('Search results')).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('Traffic scope'), {target: {value: 'local'}});
+        expect(direction).toHaveAccessibleName('Traffic direction: Downloaded 128 B (25.0%), Uploaded 384 B (75.0%)');
+        const leader = screen.getByRole('listitem');
+        expect(leader).toHaveAccessibleName(/Alpha: 512 B, 100.0%/);
+        expect(leader.querySelector('.network-download-bar')).toHaveStyle({width: '25%'});
+        expect(leader.querySelector('.network-upload-bar')).toHaveStyle({width: '75%'});
+        fireEvent.change(screen.getByLabelText('Search app, project or process'), {target: {value: 'missing'}});
+        expect(direction).toHaveAccessibleName('Traffic direction: Downloaded 0 B (—), Uploaded 0 B (—)');
+        expect(direction.querySelectorAll('circle')).toHaveLength(1);
+        expect(screen.queryByRole('list')).not.toBeInTheDocument();
+        expect(screen.getByText('No matching traffic has been collected yet.')).toBeInTheDocument();
+    });
+
+    it('ranks by cumulative traffic, includes unknown ownership and accounts for groups beyond the top five', async () => {
+        const processes = Array.from({length: 7}, (_, index) => row(index + 1, {projectPath: index === 6 ? '' : `D:\\group${index + 1}`,
+            projectName: `Group ${index + 1}`, downloadBytes: (index + 1) * 1024, uploadBytes: 0}));
+        load.mockResolvedValue(snapshot({downloadBytes: 28 * 1024, uploadBytes: 0, processes}));
+        render(<NetworkPage page={page} t={t}/>);
+        const list = await screen.findByRole('list', {name: 'App and project traffic'});
+        expect(list.children).toHaveLength(5);
+        expect(list.children[0]).toHaveAccessibleName(new RegExp(`${t('projects.ungrouped')}: 7.0 KB, 25.0%`));
+        expect(list.children[0].querySelector('.network-download-bar')).toHaveStyle({width: '25%'});
+        expect(screen.getByText('Other apps and projects · 3.0 KB · 10.7%')).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('Sort by'), {target: {value: 'upload'}});
+        expect(list.children[0]).toHaveAccessibleName(new RegExp(`${t('projects.ungrouped')}: 7.0 KB, 25.0%`));
+        expect(screen.getByRole('img', {name: /Traffic direction:/})).toHaveAccessibleName(/Downloaded 28.0 KB \(100.0%\), Uploaded 0 B \(0.0%\)/);
     });
 
     it('retains totals on refresh failure and refreshes from backend history on page reactivation', async () => {
@@ -82,6 +124,7 @@ describe('session network monitoring', () => {
         await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
         expect(screen.getByText('Unable to refresh network data. Previously collected totals are retained.')).toBeInTheDocument();
         expect(screen.getByRole('table')).toHaveTextContent('2.0 KB');
+        expect(screen.getByRole('img', {name: /Traffic direction:/})).toHaveAccessibleName(/Downloaded 2.0 KB/);
         expect(document.querySelector('.network-time-range time:last-child')).toHaveAttribute('dateTime', new Date(3000).toISOString());
         view.rerender(<PageActivityContext.Provider value={false}><NetworkPage page={page} t={t}/></PageActivityContext.Provider>);
         await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
