@@ -34,6 +34,10 @@ export function GetCleanupRules() {
   return window['go']['main']['App']['GetCleanupRules']();
 }
 
+export function GetNetworkSnapshot() {
+  return window['go']['main']['App']['GetNetworkSnapshot']();
+}
+
 export function GetOperationLogs() {
   return window['go']['main']['App']['GetOperationLogs']();
 }

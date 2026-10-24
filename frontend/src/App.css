@@ -127,6 +127,17 @@ h2, h3 { font-weight: 600; }
 .workspace-body { display: flex; flex: 1; min-height: 0; min-width: 0; overflow: auto; }
 .page-panel { width: 100%; min-width: 0; }
 .process-page { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.network-session-note { margin: 14px 20px; color: var(--text-muted); font-size: 12px; line-height: 1.6; flex-shrink: 0; }
+.network-totals { display: flex; flex-wrap: wrap; gap: 36px; margin: 4px 20px 20px; flex-shrink: 0; }
+.network-totals dt { color: var(--text-muted); font-size: 12px; }
+.network-totals dd { margin: 6px 0 0; font-size: 24px; font-variant-numeric: tabular-nums; }
+.network-table td.network-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.network-table th:not(:first-child) { text-align: right; }
+.network-group { background: var(--surface-muted); }
+.network-expand { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
+.network-expand small, .network-process small { margin-left: 10px; color: var(--text-muted); font-size: 11px; font-weight: 400; }
+.network-path { display: block; max-width: 380px; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 11px; }
+.network-table .network-process { padding-left: 32px; }
 .resource-toolbar {
     display: flex;
     align-items: flex-end;

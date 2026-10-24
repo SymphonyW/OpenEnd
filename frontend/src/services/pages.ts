@@ -27,6 +27,13 @@ export function getPages(t: Translator): PageDefinition[] {
             eyebrow: t('page.ports.eyebrow'),
         },
         {
+            id: 'network',
+            label: t('page.network.label'),
+            title: t('page.network.label'),
+            description: t('network.sessionNote'),
+            eyebrow: t('page.network.label'),
+        },
+        {
             id: 'cleanup',
             label: t('page.cleanup.label'),
             title: t('page.cleanup.title'),

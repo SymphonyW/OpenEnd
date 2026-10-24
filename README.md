@@ -31,6 +31,7 @@ It is built with Wails, Go, React, TypeScript, and Vite. The project focuses on 
 | Area | Capabilities |
 | --- | --- |
 | Dashboard | View CPU, memory, process, port, and GPU-related system resource data |
+| Network | Track session upload/download totals by app and project, with 60-second network speed charts in Performance; requires administrator privileges |
 | Processes | Inspect running processes, resource usage, executable paths, commands, and process details |
 | Apps & Projects | Group processes and ports by application or development project, with shared ownership and manual project assignments |
 | Ports | Identify occupied TCP/UDP ports and map them back to owning processes |
@@ -38,6 +39,8 @@ It is built with Wails, Go, React, TypeScript, and Vite. The project focuses on 
 | Safety | Protect critical Windows processes from accidental termination |
 | Logs | Track process and cleanup operations for later review |
 | Settings | Configure application behavior and protected process rules |
+
+Traffic statistics stay in memory and reset when OpenEnd exits. See [network monitoring](docs/network-monitoring.zh-CN.md) for scope and verification steps.
 
 ## Download
 

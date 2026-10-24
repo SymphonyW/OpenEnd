@@ -7,6 +7,7 @@ import LogsPage from './LogsPage';
 import PortsPage from './PortsPage';
 import ProcessesPage from './ProcessesPage';
 import SettingsPage from './SettingsPage';
+import NetworkPage from './NetworkPage';
 
 interface PagePanelProps {
     language: LanguageCode;
@@ -16,6 +17,7 @@ interface PagePanelProps {
 }
 
 function PagePanel({language, page, t, onLanguageChange}: PagePanelProps) {
+    if (page.id === 'network') return <NetworkPage page={page} t={t}/>;
     if (page.id === 'dashboard') {
         return <DashboardPage page={page} t={t}/>;
     }

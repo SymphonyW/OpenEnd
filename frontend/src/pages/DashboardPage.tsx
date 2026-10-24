@@ -1,6 +1,9 @@
 import {useCallback, useRef, useState} from 'react';
 import type {MouseEvent, ReactNode} from 'react';
 import StatusMessage from '../components/StatusMessage';
+import {NetworkChart, NetworkPerformance} from '../components/NetworkChart';
+import {useNetworkSnapshot} from '../hooks/useNetworkSnapshot';
+import {formatRate} from '../services/network';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
 import {formatMemorySize, formatPercent, loadSystemResourceInfo, mergeResourceInfo, resourceStatus} from '../services/systemResources';
 import type {Translator} from '../services/i18n';
@@ -61,10 +64,11 @@ function ResourceLines({points, filled = false}: {points: ReturnType<typeof grap
 }
 
 function DashboardPage({page, t}: Props) {
+	const network = useNetworkSnapshot();
     const infoRef = useRef<SystemResourceInfo | null>(null);
     const [info, setInfo] = useState<SystemResourceInfo | null>(null);
     const [history, setHistory] = useState<Sample[]>([]);
-    const [selected, setSelected] = useState<ResourceKey>('cpu');
+    const [selected, setSelected] = useState<ResourceKey | 'network'>('cpu');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
 
@@ -109,8 +113,8 @@ function DashboardPage({page, t}: Props) {
         {key: 'vram' as const, title: t('dashboard.chart.vram'), aria: t('dashboard.chart.vramAria')},
     ];
     const active = resources.find(resource => resource.key === selected)!;
-    const subtitle = info ? resourceSubtitle(info, selected, t) : t('dashboard.autoRefresh');
-    const metrics = info ? buildMetrics(info, selected, resourceUsage(info, selected), t) : [];
+    const subtitle = info && selected !== 'network' ? resourceSubtitle(info, selected, t) : t('dashboard.autoRefresh');
+    const metrics = info && selected !== 'network' ? buildMetrics(info, selected, resourceUsage(info, selected), t) : [];
 
     return (
         <section className="page-panel dashboard-page" aria-label={page.title}>
@@ -135,8 +139,14 @@ function DashboardPage({page, t}: Props) {
                             </button>
                         );
                     })}
+                    <button type="button" className="resource-select" aria-label={t('page.network.label')} aria-pressed={selected === 'network'} onClick={() => setSelected('network')}>
+                        <NetworkChart snapshot={network.snapshot} mini t={t}/>
+                        <span className="resource-select-text"><span className="resource-select-title">{t('page.network.label')}</span>
+                            <span className="resource-select-value">{!network.failed && network.snapshot?.state === 'ready' ? formatRate(network.snapshot.downloadRate + network.snapshot.uploadRate) : t(network.snapshot?.state === 'collecting' || !network.snapshot ? 'resource.collecting' : 'resource.unavailable')}</span>
+                            <span className="resource-select-meta">{t('network.rate')}</span></span>
+                    </button>
                 </div>
-                <div className="performance-main">
+                {selected === 'network' ? <NetworkPerformance snapshot={network.snapshot} failed={network.failed} t={t}/> : <div className="performance-main">
                     <div className="performance-heading">
                         <h2>{active.title}</h2>
                         <span>{subtitle}</span>
@@ -147,7 +157,7 @@ function DashboardPage({page, t}: Props) {
                     </dl>
                     {resourceStatus(info, selected).updatedAt > 0 && <p className="resource-updated-at">{t('dashboard.lastUpdated')}: {new Date(resourceStatus(info, selected).updatedAt).toLocaleTimeString()}</p>}
                     {resourceStatus(info, selected).error && <StatusMessage variant="warning">{resourceStatus(info, selected).error}</StatusMessage>}
-                </div>
+                </div>}
             </div>}
         </section>
     );
