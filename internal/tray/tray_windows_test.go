@@ -4,6 +4,8 @@ package tray
 
 import (
 	"os"
+	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -89,5 +91,79 @@ func awaitCallback(t *testing.T, ch <-chan struct{}) {
 	case <-ch:
 	case <-time.After(3 * time.Second):
 		t.Fatal("native tray action did not reach the application callback")
+	}
+}
+
+func TestNativeTrayContextMenu(t *testing.T) {
+	if os.Getenv("OPENEND_TRAY_SMOKE") != "1" {
+		t.Skip("set OPENEND_TRAY_SMOKE=1 in a Windows desktop session")
+	}
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	previousDPI, _, _ := user32.NewProc("SetThreadDpiAwarenessContext").Call(^uintptr(3))
+	defer user32.NewProc("SetThreadDpiAwarenessContext").Call(previousDPI)
+	quit := make(chan struct{}, 1)
+	var opens atomic.Int32
+	tray, err := Start(func() { opens.Add(1) }, func() { quit <- struct{}{} })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		postMessage.Call(uintptr(tray.window), 0x001f, 0, 0) // WM_CANCELMODE releases an open popup on failure.
+		if err := tray.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	var reply uintptr
+	// Explorer's notification callback must return before the modal menu is entered.
+	if ok, _, err := user32.NewProc("SendMessageTimeoutW").Call(uintptr(tray.window), wmTray, 0, wmContextMenu|1<<16, 2, 250, uintptr(unsafe.Pointer(&reply))); ok == 0 {
+		t.Fatalf("tray callback blocked while opening its menu: %v", err)
+	}
+	var rect struct{ Left, Top, Right, Bottom int32 }
+	itemRect := user32.NewProc("GetMenuItemRect")
+	deadline := time.Now().Add(3 * time.Second)
+	shown := false
+	for time.Now().Before(deadline) {
+		if ok, _, _ := itemRect.Call(uintptr(tray.window), uintptr(tray.menu), 1, uintptr(unsafe.Pointer(&rect))); ok != 0 && rect.Right > rect.Left {
+			shown = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !shown {
+		t.Fatal("right-click did not display the native Exit menu item")
+	}
+	// Click the actual menu item, after verifying the target belongs to this test.
+	var original point
+	getCursorPos.Call(uintptr(unsafe.Pointer(&original)))
+	setCursor := user32.NewProc("SetCursorPos")
+	t.Cleanup(func() { setCursor.Call(uintptr(original.X), uintptr(original.Y)) })
+	x, y := (rect.Left+rect.Right)/2, (rect.Top+rect.Bottom)/2
+	setCursor.Call(uintptr(x), uintptr(y))
+	packed := uint64(uint32(x)) | uint64(uint32(y))<<32
+	popup, _, _ := user32.NewProc("WindowFromPoint").Call(uintptr(packed))
+	var owner uint32
+	user32.NewProc("GetWindowThreadProcessId").Call(popup, uintptr(unsafe.Pointer(&owner)))
+	if owner != uint32(os.Getpid()) {
+		t.Fatal("the displayed menu does not receive input at its item coordinates")
+	}
+	t.Logf("Exit item bounds=%+v, click=(%d,%d), popup=%#x", rect, x, y, popup)
+	type mouseInput struct {
+		X, Y              int32
+		Data, Flags, Time uint32
+		Extra             uintptr
+	}
+	type input struct {
+		Type  uint32
+		Mouse mouseInput
+	}
+	inputs := [2]input{{Mouse: mouseInput{Flags: 2}}, {Mouse: mouseInput{Flags: 4}}}
+	if sent, _, err := user32.NewProc("SendInput").Call(2, uintptr(unsafe.Pointer(&inputs[0])), unsafe.Sizeof(inputs[0])); sent != 2 {
+		t.Fatalf("click Exit: %v", err)
+	}
+	select {
+	case <-quit:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("clicking Exit did not reach the callback (Open activations: %d)", opens.Load())
 	}
 }

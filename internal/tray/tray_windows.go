@@ -27,6 +27,7 @@ const (
 	wmLeftDouble  = 0x0203
 	wmRightUp     = 0x0205
 	wmTray        = 0x8001
+	wmShowMenu    = 0x8002
 	ninSelect     = 0x0400
 	ninKeySelect  = 0x0401
 	menuOpen      = 1
@@ -110,6 +111,7 @@ type Tray struct {
 	taskbarCreated uint32
 	onOpen, onQuit func()
 	ready, closing atomic.Bool
+	menuShowing    bool // Only accessed by the native message loop.
 	closeOnce      sync.Once
 	done           chan struct{}
 }
@@ -177,7 +179,8 @@ func (t *Tray) run(started chan<- error) {
 			destroyIcon.Call(uintptr(t.icon.Icon))
 		}
 	}()
-	window, _, err := createWindow.Call(0, uintptr(unsafe.Pointer(className)), 0, 0, 0, 0, 0, 0, 0, 0, instance, 0)
+	// A tool window owns the menu without creating another taskbar entry.
+	window, _, err := createWindow.Call(0x80, uintptr(unsafe.Pointer(className)), 0, 0x80000000, 0, 0, 0, 0, 0, 0, instance, 0)
 	if window == 0 {
 		started <- fmt.Errorf("create tray window: %w", err)
 		return
@@ -213,9 +216,11 @@ func (t *Tray) initialize() error {
 		return fmt.Errorf("register Explorer restart message: %w", err)
 	}
 	t.taskbarCreated = uint32(id)
-	// Explorer runs unelevated even when OpenEnd requests administrator rights.
-	if ok, _, err := changeMessageFilter.Call(uintptr(t.window), id, 1, 0); ok == 0 {
-		return fmt.Errorf("allow Explorer restart message: %w", err)
+	// Permit only tray-related messages from the unelevated shell/accessibility tools.
+	for _, message := range []uintptr{id, wmTray, wmCommand, wmContextMenu} {
+		if ok, _, err := changeMessageFilter.Call(uintptr(t.window), message, 1, 0); ok == 0 {
+			return fmt.Errorf("allow system tray message: %w", err)
+		}
 	}
 	t.icon = iconData{Window: t.window, ID: 1, Flags: 1 | 2 | 4 | 0x80, CallbackMessage: wmTray} // MESSAGE | ICON | TIP | SHOWTIP
 	t.icon.Size = uint32(unsafe.Sizeof(t.icon))
@@ -282,12 +287,21 @@ func (t *Tray) windowProc(window uintptr, msg uint32, wParam, lParam uintptr) ui
 	case wmCommand:
 		t.selectMenu(wParam & 0xffff)
 		return 0
+	case wmContextMenu:
+		postMessage.Call(window, wmShowMenu, 0, 0)
+		return 0
+	case wmShowMenu:
+		if !t.menuShowing {
+			t.showMenu()
+		}
+		return 0
 	case wmTray:
 		switch lParam & 0xffff {
 		case wmLeftUp, wmLeftDouble, ninSelect, ninKeySelect:
 			go t.onOpen()
 		case wmRightUp, wmContextMenu:
-			t.showMenu()
+			// Release Explorer's callback before entering the modal menu loop.
+			postMessage.Call(window, wmShowMenu, 0, 0)
 		}
 		return 0
 	}
@@ -313,6 +327,8 @@ func (t *Tray) selectMenu(id uintptr) {
 }
 
 func (t *Tray) showMenu() {
+	t.menuShowing = true
+	defer func() { t.menuShowing = false }()
 	var cursor point
 	if ok, _, _ := getCursorPos.Call(uintptr(unsafe.Pointer(&cursor))); ok == 0 {
 		return

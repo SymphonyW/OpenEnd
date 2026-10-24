@@ -1,6 +1,7 @@
 import {FormEvent, useCallback, useState} from 'react';
 import StatusMessage from '../components/StatusMessage';
 import {useSequentialAutoRefresh} from '../hooks/useSequentialAutoRefresh';
+import {QuitApp} from '../../wailsjs/go/main/App';
 import {
     addCleanupRule,
     addCustomProtectedProcessName,
@@ -39,6 +40,7 @@ function SettingsPage({language, page, t, onLanguageChange}: SettingsPageProps) 
     const [cleanupRulePortRanges, setCleanupRulePortRanges] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isQuitting, setIsQuitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [operationMessage, setOperationMessage] = useState('');
 
@@ -67,6 +69,17 @@ function SettingsPage({language, page, t, onLanguageChange}: SettingsPageProps) 
     }, [t]);
 
     useSequentialAutoRefresh(loadSettings, settingsRefreshIntervalMs);
+
+    const handleQuit = async () => {
+        setIsQuitting(true);
+        setErrorMessage('');
+        try {
+            await QuitApp();
+        } catch {
+            setIsQuitting(false);
+            setErrorMessage(t('settings.exitError'));
+        }
+    };
 
     const handleAddCustomProcess = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -220,6 +233,10 @@ function SettingsPage({language, page, t, onLanguageChange}: SettingsPageProps) 
                             </select>
                         </label>
                         <p>{t('settings.language.help')}</p>
+                    </div>
+                    <div className="settings-exit-row">
+                        <p>{t('settings.exitHelp')}</p>
+                        <button type="button" className="danger-button" disabled={isQuitting} onClick={() => void handleQuit()}>{t('settings.exitApp')}</button>
                     </div>
                 </section>
             </div>
