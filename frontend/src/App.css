@@ -12,6 +12,8 @@
     --accent-hover: #005a9e;
     --accent-soft: #eaf3fa;
     --accent-border: #b7d5eb;
+    --network-download: #79b8e8;
+    --network-upload: #8acb9c;
     --success: #39734a;
     --success-soft: #f4f8f4;
     --warning: #895b18;
@@ -140,8 +142,8 @@ h2, h3 { font-weight: 600; }
 .network-donut { position: relative; flex: 0 0 140px; width: 140px; height: 140px; }
 .network-donut svg { display: block; width: 100%; height: 100%; }
 .network-donut-track { fill: none; stroke: var(--border); stroke-width: 10; }
-.network-download-arc { stroke: var(--accent); }
-.network-upload-arc { stroke: #b87928; }
+.network-download-arc { stroke: var(--network-download); }
+.network-upload-arc { stroke: var(--network-upload); }
 .network-donut-total { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0; pointer-events: none; }
 .network-donut-total dt { color: var(--text-muted); font-size: 11px; }
 .network-donut-total dd { margin: 5px 0 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -149,8 +151,8 @@ h2, h3 { font-weight: 600; }
 .network-totals dt { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; color: var(--text-muted); font-size: 11px; }
 .network-totals dt small { font-size: 11px; font-variant-numeric: tabular-nums; }
 .network-totals dd { margin: 5px 0 0 11px; font-size: 21px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.network-direction-key { width: 6px; height: 6px; flex-shrink: 0; background: var(--accent); }
-.network-upload-total .network-direction-key { background: #b87928; }
+.network-direction-key { width: 6px; height: 6px; flex-shrink: 0; background: var(--network-download); }
+.network-upload-total .network-direction-key { background: var(--network-upload); }
 .network-rank-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .network-rank-list li { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 48px; align-items: center; gap: 3px 8px; padding: 2px 0; border-radius: 2px; font-size: 12px; }
 .network-rank-list li:hover, .network-rank-list li:focus-visible { background: var(--surface-blue); }
@@ -161,8 +163,8 @@ h2, h3 { font-weight: 600; }
 .network-rank-share { color: var(--text-muted); font-size: 11px; }
 .network-rank-bar { grid-column: 2 / -1; display: flex; height: 4px; overflow: hidden; background: var(--surface-muted); }
 .network-rank-bar i { height: 100%; }
-.network-download-bar { background: var(--accent); }
-.network-upload-bar { background: #b87928; }
+.network-download-bar { background: var(--network-download); }
+.network-upload-bar { background: var(--network-upload); }
 .network-rank-tooltip { position: absolute; z-index: 5; right: 0; bottom: calc(100% + 4px); display: none; max-width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 3px; background: var(--surface); color: var(--text); box-shadow: 0 2px 8px #0000000d; font-size: 11px; line-height: 1.6; pointer-events: none; }
 .network-rank-tooltip small { display: block; color: var(--text-muted); font: inherit; overflow-wrap: anywhere; }
 .network-rank-list li:hover .network-rank-tooltip, .network-rank-list li:focus-visible .network-rank-tooltip { display: block; }
