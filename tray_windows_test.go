@@ -1,0 +1,112 @@
+//go:build windows && production
+
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"sync/atomic"
+	"testing"
+	"time"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	win "golang.org/x/sys/windows"
+)
+
+// Run on a Windows desktop with OPENEND_TRAY_SMOKE=1 and -tags production.
+// This opens only a separate test window and drives its real Wails close events.
+func TestDesktopTrayLifecycle(t *testing.T) {
+	if os.Getenv("OPENEND_TRAY_SMOKE") != "1" {
+		t.Skip("set OPENEND_TRAY_SMOKE=1 in a Windows desktop session")
+	}
+	app := NewApp()
+	var stopped atomic.Bool
+	result := make(chan error, 1)
+	err := wails.Run(&options.App{
+		Title: "OpenEnd tray integration test", Width: 960, Height: 640, StartHidden: true,
+		AssetServer: &assetserver.Options{Assets: assets},
+		Windows:     &windows.Options{WindowClassName: "OpenEndTrayIntegrationTest"},
+		OnStartup:   func(ctx context.Context) { app.ctx = ctx },
+		OnDomReady: func(ctx context.Context) {
+			app.startTray(ctx)
+			err := checkDesktopTray(ctx, app, &stopped)
+			result <- err
+			if err != nil {
+				app.exitRequested.Store(true)
+				wailsruntime.Quit(ctx)
+			}
+		},
+		OnBeforeClose: app.beforeClose,
+		OnShutdown: func(ctx context.Context) {
+			stopped.Store(true)
+			app.shutdown(ctx)
+		},
+		Bind: []interface{}{app},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if !stopped.Load() || app.systemTray.Load() != nil {
+		t.Fatal("explicit exit did not run shutdown and release the tray")
+	}
+}
+
+func checkDesktopTray(ctx context.Context, app *App, stopped *atomic.Bool) error {
+	u32 := win.NewLazySystemDLL("user32.dll")
+	find := u32.NewProc("FindWindowW")
+	post := u32.NewProc("PostMessageW")
+	visible := u32.NewProc("IsWindowVisible")
+	minimized := u32.NewProc("IsIconic")
+	class, _ := win.UTF16PtrFromString("OpenEndTrayIntegrationTest")
+	window, _, _ := find.Call(uintptr(unsafe.Pointer(class)), 0)
+	trayClass, _ := win.UTF16PtrFromString(fmt.Sprintf("OpenEndTray-%d-1", os.Getpid()))
+	trayWindow, _, _ := find.Call(uintptr(unsafe.Pointer(trayClass)), 0)
+	if window == 0 || trayWindow == 0 || app.systemTray.Load() == nil {
+		return fmt.Errorf("main window or tray not initialized")
+	}
+	wait := func(description string, predicate func() bool) error {
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			if predicate() {
+				return nil
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		return fmt.Errorf("timed out waiting for %s", description)
+	}
+	isVisible := func() bool { value, _, _ := visible.Call(window); return value != 0 }
+	wailsruntime.WindowShow(ctx)
+	if err := wait("initial window", isVisible); err != nil {
+		return err
+	}
+	post.Call(window, 0x0010, 0, 0) // The actual title-bar close message.
+	if err := wait("close hides window", func() bool { return !isVisible() }); err != nil {
+		return err
+	}
+	if stopped.Load() || app.exitRequested.Load() || !app.systemTray.Load().Ready() {
+		return fmt.Errorf("window close stopped the application instead of hiding it")
+	}
+	post.Call(trayWindow, 0x8001, 0, 0x0400|1<<16) // Tray click / NIN_SELECT.
+	if err := wait("tray click restores window", isVisible); err != nil {
+		return err
+	}
+	wailsruntime.WindowMinimise(ctx)
+	if err := wait("minimized window", func() bool { value, _, _ := minimized.Call(window); return value != 0 }); err != nil {
+		return err
+	}
+	post.Call(trayWindow, 0x8001, 0, 0x0401|1<<16) // Keyboard activation also restores minimised windows.
+	if err := wait("restored minimized window", func() bool { value, _, _ := minimized.Call(window); return isVisible() && value == 0 }); err != nil {
+		return err
+	}
+	post.Call(trayWindow, 0x0111, 2, 0) // Explicit Exit menu command.
+	return wait("tray exit request", app.exitRequested.Load)
+}
