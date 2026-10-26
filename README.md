@@ -18,7 +18,7 @@
 
 # OpenEnd
 
-[Download Windows installer](https://github.com/SymphonyW/OpenEnd/releases/download/v2.3.2/OpenEnd-v2.3.2-windows-amd64-installer.exe)
+[Download Windows installer](https://github.com/SymphonyW/OpenEnd/releases/download/v2.3.3/OpenEnd-v2.3.3-windows-amd64-installer.exe)
 
 [Blog post of OpenEnd](https://symphonyw.github.io/p/openend/)
 
