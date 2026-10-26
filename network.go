@@ -20,6 +20,14 @@ func (a *App) GetNetworkSnapshot() network.Snapshot {
 	return a.networkMonitor.Snapshot()
 }
 
+// GetNetworkSummary returns the same counters and history without process rows.
+func (a *App) GetNetworkSummary() network.Snapshot {
+	if a.networkMonitor == nil {
+		return network.Snapshot{State: "collecting", Processes: []network.Row{}, History: []network.Sample{}}
+	}
+	return a.networkMonitor.Summary()
+}
+
 func (a *App) resolveNetworkProcesses(ctx context.Context, infos []process.Info) ([]process.Info, error) {
 	ownershipContext := ctx
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)

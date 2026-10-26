@@ -38,6 +38,10 @@ export function GetNetworkSnapshot() {
   return window['go']['main']['App']['GetNetworkSnapshot']();
 }
 
+export function GetNetworkSummary() {
+  return window['go']['main']['App']['GetNetworkSummary']();
+}
+
 export function GetOperationLogs() {
   return window['go']['main']['App']['GetOperationLogs']();
 }

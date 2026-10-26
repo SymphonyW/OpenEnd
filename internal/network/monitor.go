@@ -19,6 +19,10 @@ type Counters struct {
 	UploadRate         float64 `json:"uploadRate"`
 }
 
+func (c Counters) hasTraffic() bool {
+	return c.DownloadBytes > 0 || c.UploadBytes > 0 || c.LocalDownloadBytes > 0 || c.LocalUploadBytes > 0
+}
+
 type Row struct {
 	process.Info
 	Counters
@@ -138,14 +142,27 @@ func (m *Monitor) Close() {
 func (m *Monitor) Snapshot() Snapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	s := m.snapshot
-	s.Processes = make([]Row, 0)
+	s := m.summary()
 	for _, e := range m.entries {
-		if e.DownloadBytes+e.UploadBytes+e.LocalDownloadBytes+e.LocalUploadBytes > 0 {
+		if e.Counters.hasTraffic() {
 			s.Processes = append(s.Processes, e.Row)
 		}
 	}
 	sort.Slice(s.Processes, func(i, j int) bool { return s.Processes[i].ID < s.Processes[j].ID })
+	return s
+}
+
+// Summary avoids copying session-long process metadata for the performance charts.
+func (m *Monitor) Summary() Snapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.summary()
+}
+
+// Caller holds mu. The history copy keeps frontend callers from changing samples.
+func (m *Monitor) summary() Snapshot {
+	s := m.snapshot
+	s.Processes = []Row{}
 	s.History = append([]Sample{}, s.History...)
 	return s
 }
@@ -253,6 +270,7 @@ func (m *Monitor) traffic(pid int32, at int64, bytes uint32, upload, local bool)
 func (m *Monitor) sample(now time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.pruneIdleProcesses(now.UnixMilli())
 	if m.snapshot.State != "ready" {
 		return
 	}
@@ -274,6 +292,58 @@ func (m *Monitor) sample(now time.Time) {
 	m.snapshot.History = append(m.snapshot.History, Sample{now.UnixMilli(), m.snapshot.DownloadRate, m.snapshot.UploadRate})
 	if len(m.snapshot.History) > 61 {
 		m.snapshot.History = m.snapshot.History[len(m.snapshot.History)-61:]
+	}
+}
+
+// Caller holds mu. Keep a minute for out-of-order ETW events, and retain parents
+// needed for ownership lookup. Processes with traffic remain for the whole session.
+func (m *Monitor) pruneIdleProcesses(now int64) {
+	cutoff := now - time.Minute.Milliseconds()
+	removable := func(e *entry) bool {
+		return e.Exited && e.end > 0 && e.end < cutoff && !e.Counters.hasTraffic()
+	}
+	var hasExpired bool
+	for _, e := range m.entries {
+		if removable(e) {
+			hasExpired = true
+			break
+		}
+	}
+	if !hasExpired {
+		return
+	}
+	parents := make(map[*entry]bool)
+	for _, e := range m.entries {
+		if removable(e) {
+			continue
+		}
+		for parent := m.current[e.ParentPID]; parent != nil && !parents[parent]; parent = m.current[parent.ParentPID] {
+			parents[parent] = true
+		}
+	}
+	kept := m.entries[:0]
+	removedCurrent := 0
+	for _, e := range m.entries {
+		if removable(e) && !parents[e] {
+			if m.current[e.PID] == e {
+				delete(m.current, e.PID)
+				removedCurrent++
+			}
+			continue
+		}
+		kept = append(kept, e)
+	}
+	clear(m.entries[len(kept):])
+	m.entries = kept
+	if len(kept)*2 < cap(kept) {
+		m.entries = append([]*entry(nil), kept...)
+	}
+	if removedCurrent > len(m.current) {
+		current := make(map[int32]*entry, len(m.current))
+		for pid, e := range m.current {
+			current[pid] = e
+		}
+		m.current = current
 	}
 }
 
@@ -304,11 +374,14 @@ func (m *Monitor) resolve(ctx context.Context, resolve func(context.Context, []p
 		include(e.ParentPID)
 	}
 	for pid, e := range m.current {
-		if e.DownloadBytes+e.UploadBytes+e.LocalDownloadBytes+e.LocalUploadBytes > 0 {
+		if e.Counters.hasTraffic() && !(e.Exited && (e.ProjectPath != "" || e.ApplicationPath != "")) {
 			include(pid)
 		}
 	}
 	m.mu.Unlock()
+	if len(infos) == 0 {
+		return
+	}
 	resolved, err := resolve(ctx, infos)
 	m.mu.Lock()
 	defer m.mu.Unlock()
