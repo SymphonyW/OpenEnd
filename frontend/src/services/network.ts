@@ -1,9 +1,10 @@
-import {GetNetworkSnapshot} from '../../wailsjs/go/main/App';
+import {GetNetworkSnapshot, GetNetworkSummary} from '../../wailsjs/go/main/App';
 import {ownershipOf} from './projects';
 import type {NetworkProcess, NetworkSnapshot, TrafficCounters} from '../types/network';
 import type {Translator, TranslationKey} from './i18n';
 
 export const loadNetworkSnapshot = async (): Promise<NetworkSnapshot> => await GetNetworkSnapshot() as NetworkSnapshot;
+export const loadNetworkSummary = async (): Promise<NetworkSnapshot> => await GetNetworkSummary() as NetworkSnapshot;
 
 export function formatTraffic(bytes: number): string {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';

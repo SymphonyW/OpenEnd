@@ -2,12 +2,130 @@ package network
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"openend/internal/process"
 )
+
+func BenchmarkMonitorProcessChurn(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		runtime.GC()
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		m := New()
+		m.snapshot.State = "ready"
+		m.lastSample = time.UnixMilli(1000)
+		for pid := int32(1); pid <= 10000; pid++ {
+			command := strings.Repeat("x", 2048) + strconv.Itoa(int(pid))
+			m.processEvent(pid, 0, 1000, true, false, "worker.exe", command)
+			m.processEvent(pid, 0, 2000, false, false, "", "")
+		}
+		m.sample(time.UnixMilli(122000))
+		runtime.GC()
+		runtime.ReadMemStats(&after)
+		b.ReportMetric(float64(len(m.entries)), "retained-entries")
+		if after.HeapAlloc > before.HeapAlloc {
+			b.ReportMetric(float64(after.HeapAlloc-before.HeapAlloc), "retained-bytes")
+		}
+		runtime.KeepAlive(m)
+	}
+}
+
+func TestIdleProcessPruningPreservesTrafficParentsAndPIDGenerations(t *testing.T) {
+	m := New()
+	m.snapshot.State = "ready"
+	m.lastSample = time.UnixMilli(1000)
+	for _, pid := range []int32{1, 2, 3, 4, 5, 6, 7, 8} {
+		m.processEvent(pid, 0, 1000, true, false, "worker.exe", "worker")
+	}
+	m.traffic(1, 1500, 512, false, false)
+	m.traffic(8, 1500, 256, true, true)
+	for _, pid := range []int32{1, 2, 5, 6, 7, 8} {
+		m.processEvent(pid, 0, 2000, false, false, "", "")
+	}
+	m.current[3].ParentPID = 5 // Keep an exited parent and its ancestors.
+	m.current[5].ParentPID = 6
+	m.processEvent(7, 0, 3000, true, false, "new.exe", "new")
+	m.processEvent(4, 0, 120000, false, false, "", "")
+	m.sample(time.UnixMilli(122000))
+	if len(m.entries) != 7 || len(m.current) != 7 || m.current[2] != nil || m.current[7].Name != "new.exe" {
+		t.Fatalf("unexpected retained processes: entries=%d current=%v", len(m.entries), m.current)
+	}
+	for _, pid := range []int32{1, 3, 4, 5, 6, 8} {
+		if m.current[pid] == nil {
+			t.Fatalf("lost traffic, active/recent process, or required parent %d", pid)
+		}
+	}
+	m.traffic(4, 119000, 128, false, false) // An exit may arrive before its traffic.
+	m.sample(time.UnixMilli(183000))
+	s := m.Snapshot()
+	if len(s.Processes) != 3 || s.DownloadBytes != 640 || s.LocalUploadBytes != 256 || s.Processes[1].PID != 4 {
+		t.Fatalf("pruning lost archived or delayed traffic: %+v", s)
+	}
+	m.processEvent(3, 5, 184000, false, false, "", "")
+	m.sample(time.UnixMilli(245000))
+	if m.current[3] != nil || m.current[5] != nil || m.current[6] != nil {
+		t.Fatal("unused exited ancestors were retained")
+	}
+	for _, e := range m.entries[len(m.entries):cap(m.entries)] {
+		if e != nil {
+			t.Fatal("removed entries are still reachable through the slice backing array")
+		}
+	}
+}
+
+func TestNetworkSummaryKeepsCountersHistoryAndStatusWithoutProcessRows(t *testing.T) {
+	m := New()
+	m.snapshot.State, m.snapshot.StartedAt = "ready", 1000
+	m.lastSample = time.UnixMilli(1000)
+	m.processEvent(1, 0, 1000, true, false, "node.exe", "node server.js")
+	m.traffic(1, 1100, 1024, false, false)
+	m.sample(time.UnixMilli(2000))
+	m.fail(errors.New("network.traceStopped"))
+	summary, full := m.Summary(), m.Snapshot()
+	if len(summary.Processes) != 0 || summary.Processes == nil || len(full.Processes) != 1 || summary.Counters != full.Counters || summary.State != full.State || summary.Error != full.Error || summary.StartedAt != full.StartedAt || summary.UpdatedAt != full.UpdatedAt || len(summary.History) != len(full.History) {
+		t.Fatalf("summary changed the network readings: %+v", summary)
+	}
+	summary.History[0].DownloadRate = 0
+	if m.Summary().History[0].DownloadRate != 1024 {
+		t.Fatal("summary aliases monitor history")
+	}
+}
+
+func BenchmarkMonitorSnapshots(b *testing.B) {
+	m := New()
+	m.snapshot.State, m.snapshot.StartedAt = "ready", 1000
+	m.lastSample = time.UnixMilli(1000)
+	for pid := int32(1); pid <= 10000; pid++ {
+		m.processEvent(pid, 0, 1000, true, false, "worker.exe", strings.Repeat("x", 2048))
+		m.traffic(pid, 1100, 1024, false, false)
+		m.current[pid].IconDataURL = "data:image/png;base64," + strings.Repeat("x", 512)
+	}
+	for second := int64(2); second <= 62; second++ {
+		m.sample(time.UnixMilli(second * 1000))
+	}
+	for _, mode := range []struct {
+		name string
+		read func() Snapshot
+	}{{"full", m.Snapshot}, {"summary", m.Summary}} {
+		b.Run(mode.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				data, err := json.Marshal(mode.read())
+				if err != nil {
+					b.Fatal(err)
+				}
+				b.ReportMetric(float64(len(data)), "payload-bytes")
+			}
+		})
+	}
+}
 
 func TestSessionTotalsSurviveExitAndPIDReuse(t *testing.T) {
 	m := New()
@@ -107,8 +225,8 @@ func TestShortLivedProcessRetainsCapturedCommandAndAttribution(t *testing.T) {
 		t.Fatalf("short-lived process was dropped: %+v", row)
 	}
 	m.resolve(context.Background(), func(ctx context.Context, infos []process.Info) ([]process.Info, error) {
-		infos[0].ProjectPath = "" // Its directory was removed after it exited.
-		return infos, nil
+		t.Fatal("exited processes with confirmed ownership should not be queried again")
+		return nil, nil
 	})
 	if m.Snapshot().Processes[0].ProjectPath != `D:\repo` {
 		t.Fatal("exited process lost its confirmed ownership")

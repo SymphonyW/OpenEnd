@@ -25,6 +25,8 @@ export function GetCleanupRules():Promise<Array<config.CleanupRule>>;
 
 export function GetNetworkSnapshot():Promise<network.Snapshot>;
 
+export function GetNetworkSummary():Promise<network.Snapshot>;
+
 export function GetOperationLogs():Promise<Array<config.OperationLog>>;
 
 export function GetPortList():Promise<Array<port.Info>>;

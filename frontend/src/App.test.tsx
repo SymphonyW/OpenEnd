@@ -8,6 +8,7 @@ const appStyles = readFileSync('src/App.css', 'utf8');
 
 const getSystemResourceInfoMock = vi.fn();
 const getNetworkSnapshotMock = vi.fn();
+const getNetworkSummaryMock = vi.fn();
 const getProcessListMock = vi.fn();
 const getProcessDetailMock = vi.fn();
 const getPortListMock = vi.fn();
@@ -47,6 +48,7 @@ vi.mock('../wailsjs/go/main/App', () => ({
     GetRecentOperationLogsForResource: (pid: number, processName: string, ports: number[]) => getRecentOperationLogsForResourceMock(pid, processName, ports),
     GetSystemResourceInfo: () => getSystemResourceInfoMock(),
     GetNetworkSnapshot: () => getNetworkSnapshotMock(),
+    GetNetworkSummary: () => getNetworkSummaryMock(),
     KillProcessByPID: (pid: number, createdAt: number) => killProcessByPIDMock(pid, createdAt),
     KillProcessByPort: (port: number, protocol: string, pid: number, createdAt: number) => killProcessByPortMock(port, protocol, pid, createdAt),
     SetCleanupRuleEnabled: (id: string, enabled: boolean) => setCleanupRuleEnabledMock(id, enabled),
@@ -323,6 +325,8 @@ describe('App layout navigation', () => {
         getSystemResourceInfoMock.mockResolvedValue(makeSystemResourceInfo());
         getNetworkSnapshotMock.mockReset();
         getNetworkSnapshotMock.mockResolvedValue({state: 'unavailable', error: 'network.permission: Access denied', attributionError: '', startedAt: 0, updatedAt: 0, eventsLost: 0, buffersLost: 0, downloadBytes: 0, uploadBytes: 0, localDownloadBytes: 0, localUploadBytes: 0, downloadRate: 0, uploadRate: 0, processes: [], history: []});
+        getNetworkSummaryMock.mockReset();
+        getNetworkSummaryMock.mockImplementation(() => getNetworkSnapshotMock());
         getProcessListMock.mockReset();
         getProcessListMock.mockResolvedValue(processRows);
         setProcessProjectMock.mockReset();
@@ -546,17 +550,22 @@ describe('App layout navigation', () => {
     });
 
     it('opens network traffic from navigation and network graphs from Performance', async () => {
-        getNetworkSnapshotMock.mockResolvedValue({state: 'ready', error: '', attributionError: '', startedAt: 1000, updatedAt: 3000, eventsLost: 0, buffersLost: 0,
+        const snapshot = {state: 'ready', error: '', attributionError: '', startedAt: 1000, updatedAt: 3000, eventsLost: 0, buffersLost: 0,
             downloadBytes: 2048, uploadBytes: 1024, localDownloadBytes: 0, localUploadBytes: 0, downloadRate: 64, uploadRate: 32, processes: [],
-            history: [{time: 2000, downloadRate: 64, uploadRate: 32}, {time: 3000, downloadRate: 128, uploadRate: 16}]});
+            history: [{time: 2000, downloadRate: 64, uploadRate: 32}, {time: 3000, downloadRate: 128, uploadRate: 16}]};
+        getNetworkSnapshotMock.mockResolvedValue(snapshot);
+        getNetworkSummaryMock.mockResolvedValue(snapshot);
         render(<App/>);
         await screen.findByLabelText('CPU usage chart');
+        expect(getNetworkSummaryMock).toHaveBeenCalledTimes(1);
+        expect(getNetworkSnapshotMock).not.toHaveBeenCalled();
         const networkResource = screen.getAllByRole('button', {name: 'Network'}).find(button => button.hasAttribute('aria-pressed'))!;
         fireEvent.click(networkResource);
         expect(await screen.findByRole('img', {name: 'Network upload and download chart'})).toBeInTheDocument();
         const sidebar = screen.getByRole('complementary', {name: 'Primary navigation'});
         fireEvent.click(within(sidebar).getByRole('button', {name: 'Network'}));
         expect(await screen.findByText('No matching traffic has been collected yet.')).toBeInTheDocument();
+        expect(getNetworkSnapshotMock).toHaveBeenCalledTimes(1);
         await act(async () => { fireEvent.click(within(sidebar).getByRole('button', {name: 'Performance'})); });
         expect(screen.getByRole('img', {name: 'Network upload and download chart'}).querySelectorAll('polyline')).toHaveLength(2);
     });

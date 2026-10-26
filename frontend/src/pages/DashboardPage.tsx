@@ -64,7 +64,7 @@ function ResourceLines({points, filled = false}: {points: ReturnType<typeof grap
 }
 
 function DashboardPage({page, t}: Props) {
-	const network = useNetworkSnapshot();
+	const network = useNetworkSnapshot(true);
     const infoRef = useRef<SystemResourceInfo | null>(null);
     const [info, setInfo] = useState<SystemResourceInfo | null>(null);
     const [history, setHistory] = useState<Sample[]>([]);
